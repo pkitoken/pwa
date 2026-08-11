@@ -190,15 +190,25 @@ function renderCal(local) {
 
   const startDow = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
   const daysIn = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const prevDaysIn = new Date(Date.UTC(y, m - 1, 0)).getUTCDate();
+
   const lead = (startDow - S.weekStart + 7) % 7;
+  const trail = (7 - ((lead + daysIn) % 7)) % 7;   // just enough to finish the last week
 
   let html = '';
   for (let i = 0; i < 7; i++) html += `<div class="wd">${WD[(S.weekStart + i) % 7]}</div>`;
-  for (let i = 0; i < lead; i++) html += '<div class="day other"></div>';
+
+  // tail of the previous month
+  for (let i = lead; i > 0; i--) html += `<div class="day other">${prevDaysIn - i + 1}</div>`;
+
   for (let d = 1; d <= daysIn; d++) {
     const today = y === local.y && m === local.m && d === local.d;
     html += `<div class="day${today ? ' today' : ''}"${today ? ' aria-current="date"' : ''}>${d}</div>`;
   }
+
+  // head of the next month
+  for (let d = 1; d <= trail; d++) html += `<div class="day other">${d}</div>`;
+
   $grid.innerHTML = html;
 }
 
