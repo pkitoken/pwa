@@ -617,6 +617,15 @@ function showVersion() {
 }
 
 if (SW_OK) {
+  /* Attached before register(), not after. A new worker can install, activate
+     and claim the page faster than register() resolves; listening afterwards
+     misses that and leaves the old shell on screen until the next launch. */
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!HAD_CONTROLLER || reloading) return;
+    reloading = true;
+    location.reload();
+  });
+
   window.addEventListener('load', async () => {
     try {
       // updateViaCache:'none' keeps the HTTP cache from hiding a new worker
@@ -625,17 +634,22 @@ if (SW_OK) {
       return;   // e.g. plain http:// over the LAN — not a secure context
     }
 
-    /* A new worker taking control means the markup and CSS on screen are from
-       the previous release, so reload once to pick up the new shell. */
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!HAD_CONTROLLER || reloading) return;
-      reloading = true;
-      location.reload();
+    // a worker already parked in "waiting" from a previous launch
+    if (swReg.waiting) swReg.waiting.postMessage({ type: 'SKIP_WAITING' });
+
+    // ...or one that finishes installing during this launch
+    swReg.addEventListener('updatefound', () => {
+      const fresh = swReg.installing;
+      if (!fresh) return;
+      fresh.addEventListener('statechange', () => {
+        if (fresh.state === 'installed' && navigator.serviceWorker.controller) {
+          fresh.postMessage({ type: 'SKIP_WAITING' });
+        }
+      });
     });
 
-    /* No polling for updates. The browser checks sw.js by itself as part of
-       registering on each launch, which is enough to pick up a new release
-       and costs nothing extra. */
+    /* No polling. The browser checks sw.js itself while registering on each
+       launch, which is enough to pick up a release without extra requests. */
     navigator.serviceWorker.ready.then(showVersion);
   });
 }
