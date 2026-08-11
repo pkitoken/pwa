@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en" data-theme="green">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LED Clock</title>
+<meta name="description" content="Digital clock, world clocks and calendar on one screen.">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<main id="app">
+
+  <section class="clock">
+    <div id="time" class="time" aria-hidden="true"></div>
+    <p id="srTime" class="sr-only"></p>
+    <div id="dateline" class="dateline"></div>
+  </section>
+
+  <section id="world" class="world" aria-label="World clocks"></section>
+
+  <section class="cal">
+    <div class="calhead">
+      <button id="prevMonth" class="navbtn" aria-label="Previous month">&lsaquo;</button>
+      <button id="monthNum" class="monthnum" aria-label="Back to this month"></button>
+      <button id="nextMonth" class="navbtn" aria-label="Next month">&rsaquo;</button>
+    </div>
+    <div id="grid" class="grid"></div>
+  </section>
+
+</main>
+
+<nav class="tabbar" aria-label="Settings">
+  <button id="btnTheme" aria-label="Colour theme">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 21c0-2.5 1.6-4 3.7-4 1.8 0 3 1.1 3 2.8C9.7 21.4 8 22 6.2 22H3v-1z"/>
+      <path d="M10.5 16.5 20.2 6.8a2.3 2.3 0 0 0-3.2-3.2L7.3 13.3"/>
+    </svg>
+  </button>
+  <button id="btnCities" aria-label="Cities">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9"/>
+      <ellipse cx="12" cy="12" rx="4" ry="9"/>
+      <path d="M3.5 9h17M3.5 15h17"/>
+    </svg>
+  </button>
+  <button id="btnSettings" aria-label="Settings">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="3.2"/>
+      <path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3M6 6l2.1 2.1M15.9 15.9 18 18M18 6l-2.1 2.1M8.1 15.9 6 18"/>
+    </svg>
+  </button>
+</nav>
+
+<div id="scrim" class="scrim" hidden></div>
+<div id="sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+  <header class="sheethead">
+    <h2 id="sheetTitle"></h2>
+    <button id="sheetClose" aria-label="Close">&times;</button>
+  </header>
+  <div id="sheetBody" class="sheetbody"></div>
+</div>
+
+<noscript><p class="noscript">This clock needs JavaScript.</p></noscript>
+
+<script src="app.js"></script>
+</body>
+</html>
