@@ -47,7 +47,10 @@ const $sheetTitle = $('sheetTitle'), $sheetBody = $('sheetBody');
 
 /* ------------------------------------------------------------ time helpers */
 
-const LOCAL_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+/* Not a constant: the device's zone changes when you travel, and an installed
+   PWA can stay loaded for days across a flight. Re-checked periodically. */
+let LOCAL_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 const WD = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
 const _fmts = new Map();
@@ -230,8 +233,27 @@ function refreshAll() {
 
 /* ------------------------------------------------------------------- tick */
 
+/** True if the device moved to a different time zone since the last look. */
+function checkTimeZone() {
+  let tz;
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return false; }
+  if (!tz || tz === LOCAL_TZ) return false;
+  LOCAL_TZ = tz;
+  _fmts.delete(tz);            // drop any formatter built before the switch
+  return true;
+}
+
+let lastTzCheck = 0;
+
 function tick() {
   const now = new Date();
+
+  if (now - lastTzCheck > 30000) {
+    lastTzCheck = +now;
+    // a new zone changes the clock, the date, the weekday and every offset
+    if (checkTimeZone()) lastTimeKey = lastDayKey = lastMinKey = '';
+  }
+
   const local = zoned(now, LOCAL_TZ);
   lastLocal = local;
 
@@ -417,7 +439,10 @@ async function applyWake() {
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && S.wake) applyWake();
+  if (document.visibilityState !== 'visible') return;
+  if (S.wake) applyWake();
+  // most likely moment to discover a new zone: reopening after a flight
+  lastTzCheck = 0;
 });
 
 /* --- cities --- */
