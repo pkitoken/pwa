@@ -610,22 +610,10 @@ async function activeVersion() {
   });
 }
 
-/** For the corner badge: ask the worker, else read VERSION out of sw.js itself.
-    Keeping sw.js the only place the number appears means the two can't drift. */
-async function resolveVersion() {
-  const fromWorker = await activeVersion();
-  if (fromWorker) return fromWorker;
-  try {
-    const res = await fetch('sw.js', { cache: 'no-store' });
-    const m = (await res.text()).match(/const VERSION\s*=\s*'([^']+)'/);
-    return m ? m[1] : null;
-  } catch {
-    return null;   // opened from file:// — nothing to report
-  }
-}
-
+/* The badge asks the running worker over a message channel — no network, and
+   sw.js stays the only place the number is written, so the two can't drift. */
 function showVersion() {
-  resolveVersion().then((v) => { if (v) $('version').textContent = `v${v}`; });
+  activeVersion().then((v) => { if (v) $('version').textContent = `v${v}`; });
 }
 
 if (SW_OK) {
@@ -645,12 +633,10 @@ if (SW_OK) {
       location.reload();
     });
 
-    const check = () => { if (swReg) swReg.update().catch(() => {}); };
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') check();
-    });
-    // an installed PWA can sit open for days without ever re-requesting sw.js
-    setInterval(check, 30 * 60 * 1000);
+    /* No polling for updates. The browser checks sw.js by itself as part of
+       registering on each launch, which is enough to pick up a new release
+       and costs nothing extra. */
+    navigator.serviceWorker.ready.then(showVersion);
   });
 }
 
