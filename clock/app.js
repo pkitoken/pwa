@@ -87,9 +87,6 @@ function fmtOffset(mins) {
   return (mins < 0 ? '-' : '+') + (Number.isInteger(h) ? h : +h.toFixed(2));
 }
 
-const dayDelta = (a, b) =>
-  Math.round((Date.UTC(a.y, a.m - 1, a.d) - Date.UTC(b.y, b.m - 1, b.d)) / 86400000);
-
 function clockStr(p) {
   let h = p.H, mer = '';
   if (S.hour12) { mer = h >= 12 ? ' PM' : ' AM'; h = h % 12 || 12; }
@@ -180,13 +177,8 @@ function renderWorld(now, local) {
     try { p = zoned(now, c.tz); }
     catch { return `<div class="row">${esc(c.label)}: <span class="meta">unknown zone</span></div>`; }
 
-    const delta = dayDelta(p, local);
-    const day = delta === 0 ? 'Today'
-              : delta === 1 ? 'Tomorrow'
-              : delta === -1 ? 'Yesterday'
-              : (delta > 0 ? `+${delta}d` : `${delta}d`);
     const off = fmtOffset(offsetMin(now, c.tz) - base);
-    return `<div class="row">${esc(c.label)}: ${clockStr(p)} <span class="meta">(${day}, ${off})</span></div>`;
+    return `<div class="row">${esc(c.label)}: ${clockStr(p)} <span class="meta">(${p.wd} ${off})</span></div>`;
   }).join('');
 }
 
@@ -357,10 +349,6 @@ $('btnSettings').onclick = () => openSheet('Settings', (body) => {
     optRow('Keep screen awake', segControl([['Off', false], ['On', true]], S.wake,
       (v) => { S.wake = v; applyWake(); }))
   );
-  const ver = el('span', null, '…');
-  body.appendChild(optRow('Version', ver));
-  activeVersion().then((v) => { ver.textContent = v ? `v${v}` : 'not installed'; });
-
   body.appendChild(el('p', 'hint', `Local time zone: ${LOCAL_TZ}`));
 });
 
@@ -550,6 +538,24 @@ async function activeVersion() {
   });
 }
 
+/** For the corner badge: ask the worker, else read VERSION out of sw.js itself.
+    Keeping sw.js the only place the number appears means the two can't drift. */
+async function resolveVersion() {
+  const fromWorker = await activeVersion();
+  if (fromWorker) return fromWorker;
+  try {
+    const res = await fetch('sw.js', { cache: 'no-store' });
+    const m = (await res.text()).match(/const VERSION\s*=\s*'([^']+)'/);
+    return m ? m[1] : null;
+  } catch {
+    return null;   // opened from file:// — nothing to report
+  }
+}
+
+function showVersion() {
+  resolveVersion().then((v) => { if (v) $('version').textContent = `v${v}`; });
+}
+
 if (SW_OK) {
   window.addEventListener('load', async () => {
     try {
@@ -580,4 +586,5 @@ if (SW_OK) {
 
 applyChrome();
 applyWake();
+showVersion();
 tick();

@@ -102,8 +102,24 @@ html[data-ghost="on"] .time .off { opacity: 0.07; }
 }
 
 .world .row { text-wrap: balance; }
-.world .meta { color: var(--dim); }
+/* same treatment as the calendar's weekday headers */
+.world .meta {
+  color: var(--dim);
+  font-size: 0.62em;
+  letter-spacing: 0.04em;
+}
 .world .empty { color: var(--dim); font-size: 0.92em; }
+
+.version {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 8px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  z-index: 5;
+  pointer-events: none;
+}
 
 /* ---------- calendar ---------- */
 
