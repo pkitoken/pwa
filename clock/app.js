@@ -262,11 +262,48 @@ function shiftMonth(n) {
   while (m < 1)  { m += 12; y--; }
   view = { y, m };
   renderCal(lastLocal);
+  animateGrid(n);
+}
+
+/** Slide the grid in from the side the new month came from. */
+function animateGrid(dir) {
+  $grid.classList.remove('from-right', 'from-left');
+  void $grid.offsetWidth;              // force reflow so the animation restarts
+  $grid.classList.add(dir > 0 ? 'from-right' : 'from-left');
 }
 
 $('prevMonth').onclick = () => shiftMonth(-1);
 $('nextMonth').onclick = () => shiftMonth(1);
-$monthNum.onclick = () => { view = null; renderCal(lastLocal); };
+$monthNum.onclick = () => { view = null; renderCal(lastLocal); animateGrid(0); };
+
+/* --- swipe left/right anywhere on the main screen to change month --- */
+
+const SWIPE_MIN = 45;      // px of travel before it counts
+const SWIPE_MAX_MS = 700;  // slower than this is a drag, not a swipe
+
+let swipe = null;
+
+$('app').addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  swipe = { x: e.clientX, y: e.clientY, t: Date.now() };
+});
+
+// released on document, so a swipe still counts if the finger lifts off #app
+document.addEventListener('pointerup', (e) => {
+  if (!swipe) return;
+  const { x, y, t } = swipe;
+  swipe = null;
+
+  if (Date.now() - t > SWIPE_MAX_MS) return;
+  const dx = e.clientX - x;
+  const dy = e.clientY - y;
+  // must be clearly horizontal, so vertical scrolling never flips the month
+  if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+  shiftMonth(dx < 0 ? 1 : -1);
+});
+
+document.addEventListener('pointercancel', () => { swipe = null; });
 
 /* ---------------------------------------------------------------- sheets */
 
