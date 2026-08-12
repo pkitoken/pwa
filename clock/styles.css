@@ -10,6 +10,7 @@
   --glow: 0 0 0.35em color-mix(in srgb, var(--fg) 45%, transparent);
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas,
           "DejaVu Sans Mono", monospace;
+  --pad: 16px;
   --pad: clamp(12px, 4vw, 20px);
 }
 
@@ -66,12 +67,17 @@ body {
   align-items: flex-end;
   justify-content: center;
   gap: 0.06em;
+  font-size: 84px;                       /* fallback where clamp() is unsupported */
   font-size: clamp(58px, 21vw, 108px);   /* drives the SVG digit height */
   line-height: 1;
   filter: drop-shadow(0 0 0.10em color-mix(in srgb, var(--fg) 55%, transparent));
 }
 
-.time svg { height: 1em; width: auto; display: block; }
+/* Both axes given explicitly — never rely on the SVG's intrinsic ratio.
+   0.566em = 60/106 and 0.189em = 20/106, matching each viewBox. */
+.time svg { height: 1em; display: block; }
+.time .digit { width: 0.566em; }
+.time .colon { width: 0.189em; }
 .time .on  { fill: var(--fg); }
 .time .off { fill: var(--fg); opacity: 0; transition: opacity .12s linear; }
 html[data-ghost="on"] .time .off { opacity: 0.07; }
@@ -87,6 +93,7 @@ html[data-ghost="on"] .time .off { opacity: 0.07; }
 
 .dateline {
   margin-top: 0.35em;
+  font-size: 24px;
   font-size: clamp(19px, 6.6vw, 30px);
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -96,9 +103,11 @@ html[data-ghost="on"] .time .off { opacity: 0.07; }
 /* ---------- world clocks ---------- */
 
 .world {
+  margin: 24px 0;
   margin: clamp(18px, 5vw, 30px) 0;
   display: grid;
   gap: 0.34em;
+  font-size: 16px;
   font-size: clamp(14px, 4.3vw, 18px);
   text-align: center;
   line-height: 1.35;
@@ -137,6 +146,7 @@ html[data-ghost="on"] .time .off { opacity: 0.07; }
 .monthnum {
   background: none; border: 0; color: var(--fg);
   font-family: var(--mono);
+  font-size: 38px;
   font-size: clamp(30px, 10vw, 46px);
   font-weight: 700;
   line-height: 1;
@@ -169,8 +179,10 @@ html[data-ghost="on"] .time .off { opacity: 0.07; }
 .grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
+  gap: 4px 0;
   gap: clamp(2px, 1.2vw, 6px) 0;
   text-align: center;
+  font-size: 18px;
   font-size: clamp(15px, 5.2vw, 22px);
   font-weight: 700;
 }

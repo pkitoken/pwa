@@ -6,7 +6,7 @@
  * every shell file under a new cache name and deletes the old cache.
  */
 
-const VERSION = '1.5';
+const VERSION = '1.6';
 const CACHE = `ledclock-${VERSION}`;
 
 const SHELL = [

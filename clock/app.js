@@ -118,9 +118,12 @@ const LIT = {
   '5': 'afgcd',  '6': 'afgecd', '7': 'abc',   '8': 'abcdefg', '9': 'abcdfg'
 };
 
+/* width/height attributes are not decoration: some WebKit versions refuse to
+   derive an SVG's intrinsic ratio from viewBox alone, which collapses the
+   digits to the default replaced-element size. CSS pins both axes too. */
 function digitSVG(ch) {
   const on = LIT[ch] || '';
-  let out = '<svg viewBox="0 0 60 106">';
+  let out = '<svg class="digit" width="60" height="106" viewBox="0 0 60 106">';
   for (const k of 'abcdefg') {
     out += `<polygon class="${on.includes(k) ? 'on' : 'off'}" points="${SEGMENTS[k]}"/>`;
   }
@@ -128,7 +131,7 @@ function digitSVG(ch) {
 }
 
 const colonSVG = () =>
-  '<svg class="colon" viewBox="0 0 20 106">' +
+  '<svg class="colon" width="20" height="106" viewBox="0 0 20 106">' +
   '<circle class="on" cx="10" cy="36" r="5.5"/>' +
   '<circle class="on" cx="10" cy="72" r="5.5"/></svg>';
 
