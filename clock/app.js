@@ -57,8 +57,12 @@ const _fmts = new Map();
 function fmtFor(tz) {
   let f = _fmts.get(tz);
   if (!f) {
+    /* hour12:false rather than hourCycle:'h23' — hourCycle needs iOS 14, and
+       when it is ignored the formatter falls back to 12-hour output, making
+       every afternoon time read as AM and every offset wrong by 12 hours.
+       Some older engines return "24" for midnight, hence the % 24 below. */
     f = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz, hourCycle: 'h23', weekday: 'short',
+      timeZone: tz, hour12: false, weekday: 'short',
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit'
     });
