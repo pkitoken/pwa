@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#0b0d10">
+<title>股文观止</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<style>
+:root{--bg:#0b0d10;--card:#14181d;--ink:#e6e9ee;--dim:#8b94a3;--line:#232a33;--accent:#4c9aff;--bad:#ff6b6b}
+@media (prefers-color-scheme:light){
+  :root{--bg:#f5f6f8;--card:#fff;--ink:#14181d;--dim:#5b6472;--line:#dfe3e9;--accent:#0b62d6;--bad:#c22}
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);
+     font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+     padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+header{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);
+       position:sticky;top:0;background:var(--bg);z-index:5}
+select{font:inherit;font-size:15px;font-weight:650;flex:1;padding:7px 10px;border-radius:9px;
+        border:1px solid var(--line);background:var(--card);color:var(--ink)}
+button{font:inherit;font-size:14px;padding:7px 12px;border-radius:9px;border:1px solid var(--line);
+       background:var(--card);color:var(--ink);cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button:active{opacity:.7}
+button.busy{background:var(--warn,#f0a848);border-color:var(--warn,#f0a848);color:#111;
+            font-variant-numeric:tabular-nums}
+:root{--warn:#f0a848}
+#status{padding:8px 14px;font-size:13px;color:var(--dim);border-bottom:1px solid var(--line);min-height:34px}
+#status.bad{color:var(--bad)}
+section{padding:18px 14px;max-width:640px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+h2{font-size:15px;margin:0 0 10px}
+p{color:var(--dim);font-size:14px;margin:0 0 12px}
+label{display:block;font-size:13px;color:var(--dim);margin:12px 0 5px}
+input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:9px;
+      border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+input[type=file]{padding:9px;font-size:14px}
+#frame{width:100%;border:0;height:60vh;background:var(--bg);display:block}
+#chips{display:flex;gap:7px;overflow-x:auto;padding:9px 12px;border-bottom:1px solid var(--line);
+       -webkit-overflow-scrolling:touch}
+#chips[hidden]{display:none}
+.chip{flex:0 0 auto;font-size:13px;padding:6px 12px;border-radius:20px;
+      border:1px solid var(--line);background:var(--card);color:var(--ink);font-variant-numeric:tabular-nums}
+.chip-new{border-color:var(--accent);color:var(--accent)}
+.row{display:flex;gap:8px}
+ol{color:var(--dim);font-size:14px;padding-left:20px;margin:0 0 12px}
+li{margin-bottom:5px}
+code{background:var(--bg);padding:1px 5px;border-radius:4px;font-size:13px;border:1px solid var(--line)}
+
+/* 横屏：垂直空间稀缺，压缩固定高度的部分，弹窗改为居中而非底部抽屉 */
+/* 横屏：内容高度由 iframe 自撑、整页滚动，所以不压字号。
+   只把固定占位的头部收紧一点，并把弹窗改为居中卡片（底部抽屉在横屏只剩一条缝）。 */
+@media (orientation:landscape){
+  header{padding:9px 14px}
+  h1,select#market{font-size:18px}
+  header button{font-size:16px;padding:8px 14px}
+  #status{padding:7px 14px;min-height:30px;font-size:15px}
+  #chips{padding:8px 12px;gap:8px}
+  .chip{font-size:15px;padding:8px 14px}
+  .sheet h2{font-size:19px}
+  .row2,label,.hint{font-size:15px}
+  input,select{font-size:17px}
+  .sheet button{font-size:16px;padding:9px 14px}
+  #modal,#mgmt{align-items:center}
+  .sheet{max-width:640px;max-height:92vh;border-radius:14px;
+         padding:16px 18px calc(16px + env(safe-area-inset-bottom))}
+}
+#mgmt{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:21;display:flex;align-items:flex-end}
+#mgmt[hidden]{display:none}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20;display:flex;align-items:flex-end}
+#modal[hidden]{display:none}
+.sheet{background:var(--card);width:100%;max-width:520px;margin:0 auto;border-radius:16px 16px 0 0;
+       padding:20px 18px calc(20px + env(safe-area-inset-bottom));max-height:88vh;overflow:auto}
+.sheet h2{margin:0}
+.titlerow{display:flex;align-items:baseline;gap:12px;margin-bottom:12px}
+.titlerow h2{flex:1;min-width:0}
+#tomgmt{flex:0 0 auto;background:none;border:0;padding:4px 2px;color:var(--accent);
+        font-size:14px;text-decoration:underline}
+#tomgmt[hidden]{display:none}
+.row2{display:flex;align-items:center;gap:9px;margin:9px 0;font-size:15px;color:var(--ink)}
+.row2 input{width:auto;margin:0}
+.hint{color:var(--dim);font-size:12.5px;margin-top:5px}
+select{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:9px;
+       border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.bad{color:var(--bad)}
+</style>
+</head>
+<body>
+
+<header>
+  <select id="market" aria-label="选择要查看的内容">
+    <option value="cn">🇨🇳 中港股</option>
+    <option value="us">🇺🇸 美股</option>
+  </select>
+  <button id="ondemand" class="primary">按需</button>
+  <button id="refresh">刷新</button>
+  <button id="lock">锁定</button>
+</header>
+<div id="status"></div>
+
+<section id="setup" hidden>
+  <div class="card">
+    <h2>首次设置</h2>
+    <p>本页面不含任何密钥。私钥由你从本地文件导入，只存在这台手机上，永不上传。</p>
+    <ol>
+      <li>把 <code>private-pkcs8.der</code> 传到手机（USB、局域网或二维码）</li>
+      <li>设一个口令保护它</li>
+      <li>选择该文件完成导入</li>
+    </ol>
+    <label>设置口令（至少 8 位）</label>
+    <input id="newpass" type="password" autocomplete="new-password" placeholder="用于本机加密私钥">
+    <label>选择私钥文件（.der 或 .pem）</label>
+    <input id="keyfile" type="file">
+    <div class="hint">iPhone 若看不到文件，先用「文件」App 把它存到「我的 iPhone」再选</div>
+  </div>
+</section>
+
+<section id="unlock" hidden>
+  <div class="card">
+    <h2>解锁</h2>
+    <p>输入口令。解锁后 24 小时内无需重复输入。</p>
+    <input id="pass" type="password" autocomplete="current-password" placeholder="口令">
+    <div class="row" style="margin-top:12px">
+      <button id="unlockbtn" class="primary" style="flex:1">解锁</button>
+      <button id="reset">清除私钥</button>
+    </div>
+  </div>
+</section>
+
+<div id="modal" hidden>
+  <div class="sheet">
+    <div class="titlerow">
+      <h2 id="modaltitle">按需运行</h2>
+      <button id="tomgmt" hidden>管理</button>
+    </div>
+    <div id="note" class="hint" style="color:var(--warn)"></div>
+    <div id="hoststat" class="hint"></div>
+
+    <label class="row2"><input type="radio" name="job" value="brief" checked><span>重跑简报</span></label>
+    <label class="row2"><input type="radio" name="job" value="ticker"><span>个股分析</span></label>
+    <label class="row2"><input type="radio" name="job" value="lhb"><span>龙虎榜（A 股全榜）</span></label>
+
+    <div id="tickerbox" hidden>
+      <label>股票代码</label>
+      <input id="ticker" type="text" inputmode="latin" autocapitalize="characters"
+             placeholder="AMZN / 00384 / 600118">
+      <div class="hint">美股用字母，港股 4–5 位数字，A 股 6 位数字</div>
+    </div>
+
+    <label>市场</label>
+    <div id="mkthint" class="hint" style="margin:0 0 5px"></div>
+    <select id="reqmarket">
+      <option value="cn">🇨🇳 中港股</option>
+      <option value="us">🇺🇸 美股</option>
+    </select>
+
+    <label class="row2" style="margin-top:14px">
+      <input type="checkbox" id="withai" checked><span>带 AI 复核（约多 60–90 秒）</span></label>
+
+    <div id="quota" class="hint" style="margin-top:12px"></div>
+
+    <div class="row" style="margin-top:16px">
+      <button id="submit" class="primary" style="flex:1">开始</button>
+      <button id="cancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<div id="mgmt" hidden>
+  <div class="sheet">
+    <h2 id="mgmttitle">管理标的</h2>
+    <div class="hint" style="margin-bottom:14px">从「按需」弹窗右上角的「管理」进入</div>
+
+    <label>类型</label>
+    <select id="mkind">
+      <option value="swing">🔴 短线 —— 全套技术信号</option>
+      <option value="income">🟢 收息 —— 只看结构性破位</option>
+      <option value="options">🟣 期权 —— 备兑看涨标的（仅美股）</option>
+    </select>
+
+    <label>持仓成本（留空表示清除持仓）</label>
+    <input id="mcost" type="text" inputmode="decimal" placeholder="如 7.50">
+    <label>持仓数量（可留空）</label>
+    <input id="mqty" type="text" inputmode="numeric" placeholder="如 2000">
+
+    <label>显示名称</label>
+    <input id="mname" type="text" placeholder="如 中国燃气">
+
+    <div id="mgmtnote" class="hint" style="color:var(--warn);margin-top:10px"></div>
+
+    <div class="row" style="margin-top:16px">
+      <button id="msave" class="primary" style="flex:1">保存</button>
+      <button id="mclose">取消</button>
+    </div>
+    <button id="mremove" style="width:100%;margin-top:10px;color:var(--bad);border-color:var(--bad)">
+      从自选移除</button>
+  </div>
+</div>
+
+<section id="content" hidden style="padding:0;max-width:none">
+  <div id="chips" hidden></div>
+  <iframe id="frame" sandbox="allow-scripts"></iframe>
+</section>
+
+<script src="./app.js"></script>
+</body>
+</html>
