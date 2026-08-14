@@ -8,7 +8,7 @@
  *   - After a successful unlock the unwrapped key is cached for 24 hours,
  *     then purged and the passphrase is required again.
  */
-const APP_VERSION = "6.2";
+const APP_VERSION = "6.3";
 const API = "/ipa";            // 仅路径叫 ipa，其余一律 api
 const LANDSCAPE_ZOOM = 1.28;   // 横屏整体放大倍数，想调就改这里
 const POLL_MS = 3000;          // 结果轮询间隔
@@ -344,7 +344,12 @@ async function inboxKey() {
 async function ghFetch(path, opts = {}) {
   const tok = await ghTok();
   if (!tok) throw new Error("尚未设置 GitHub 令牌（按需面板底部 ⚙）");
-  return fetch(`${GH_API}/repos/${GH_USER}/${GH_INBOX}/${path}`, {
+  /* ⚠️ path 为空时**不能留下尾斜杠**：`/repos/o/r/` 在 GitHub 上是 404，
+   * 而 CORS 预检必须返回 2xx 才算通过 —— 404 的预检直接失败，浏览器抛出
+   * `TypeError: Failed to fetch`，**看不到那个 404**，排查时极易误判成网络问题。
+   * （2026-08-14 手机上就是这么炸的。） */
+  const base = `${GH_API}/repos/${GH_USER}/${GH_INBOX}`;
+  return fetch(path ? `${base}/${path}` : base, {
     ...opts, cache: "no-store",
     headers: { Authorization: `Bearer ${tok}`,
                Accept: "application/vnd.github+json",
