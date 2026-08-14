@@ -8,7 +8,7 @@
  *   - After a successful unlock the unwrapped key is cached for 24 hours,
  *     then purged and the passphrase is required again.
  */
-const APP_VERSION = "6.5";
+const APP_VERSION = "6.6";
 const API = "/ipa";            // 仅路径叫 ipa，其余一律 api
 const LANDSCAPE_ZOOM = 1.28;   // 横屏整体放大倍数，想调就改这里
 const POLL_MS = 3000;          // 结果轮询间隔
