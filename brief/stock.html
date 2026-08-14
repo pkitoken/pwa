@@ -9,6 +9,12 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
+<!-- iOS 专用。iOS 不认 beforeinstallprompt，**没有任何办法弹出安装提示**，
+     只能靠这些标签让「添加到主屏幕」之后以独立应用方式启动（无浏览器地址栏）。
+     iOS 16.4 起也会读 manifest 的 display:standalone，但老系统只认这个 meta。 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="股文观止">
 <style>
 :root{--bg:#0b0d10;--card:#14181d;--ink:#e6e9ee;--dim:#8b94a3;--line:#232a33;--accent:#4c9aff;--bad:#ff6b6b}
 @media (prefers-color-scheme:light){
@@ -101,6 +107,12 @@ select{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:9p
   <button id="refresh">刷新</button>
 </header>
 <div id="status"></div>
+<div id="iosinstall" hidden style="padding:10px 14px;font-size:13px;line-height:1.5;
+     background:var(--card);border-bottom:1px solid var(--line);color:var(--dim)">
+  <b style="color:var(--ink)">装到主屏幕</b>：点底部 <b>分享</b> ⬆️ →
+  <b>添加到主屏幕</b>。<span style="color:var(--warn)">装好后需重新导入私钥</span>（独立应用的存储与浏览器分开）。
+  <button id="iosdismiss" style="margin-left:6px;padding:3px 9px;font-size:12px">知道了</button>
+</div>
 
 <section id="setup" hidden>
   <div class="card">

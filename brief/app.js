@@ -8,7 +8,7 @@
  *   - After a successful unlock the unwrapped key is cached for 24 hours,
  *     then purged and the passphrase is required again.
  */
-const APP_VERSION = "6.4";
+const APP_VERSION = "6.5";
 const API = "/ipa";            // 仅路径叫 ipa，其余一律 api
 const LANDSCAPE_ZOOM = 1.28;   // 横屏整体放大倍数，想调就改这里
 const POLL_MS = 3000;          // 结果轮询间隔
@@ -1022,3 +1022,27 @@ $("reset").addEventListener("click", async () => {
   if (!(await kvGet("wrapped"))) { show("setup"); return; }
   if (await sessionKey()) { await render(); } else { show("unlock"); }
 })();
+
+
+/* ---------- iOS 安装提示 ----------
+ * iOS **不支持 beforeinstallprompt**，网页无法唤起任何安装框 —— 这是平台限制，
+ * 绕不过去。Chrome 在安卓/桌面上那个「安装」条是浏览器自己弹的，iOS 上不存在。
+ * 能做的只有告诉用户手动路径：分享 → 添加到主屏幕。
+ *
+ * ⚠️ 而且 iOS 上**从主屏幕启动的独立应用与浏览器的存储是分开的** ——
+ * 私钥存在 IndexedDB 里，所以装完要重新导入一次。这条必须提前说，
+ * 否则用户装完发现要重新设置，会以为坏了。 */
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+  || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const standalone = window.matchMedia("(display-mode: standalone)").matches
+  || navigator.standalone === true;
+
+(async () => {
+  if (!isIOS || standalone) return;              // 已经是独立应用就别再提示
+  if (await kvGet("ios-install-dismissed")) return;
+  $("iosinstall").hidden = false;
+})();
+$("iosdismiss").addEventListener("click", async () => {
+  await kvSet("ios-install-dismissed", 1);
+  $("iosinstall").hidden = true;
+});
