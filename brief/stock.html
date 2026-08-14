@@ -144,6 +144,17 @@ select{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:9p
     <label class="row2"><input type="radio" name="job" value="brief" checked><span>重跑简报</span></label>
     <label class="row2"><input type="radio" name="job" value="ticker"><span>个股分析</span></label>
     <label class="row2"><input type="radio" name="job" value="lhb"><span>龙虎榜（A 股全榜）</span></label>
+    <label class="row2"><input type="radio" name="job" value="free"><span>自由指令（写要买卖什么）</span></label>
+
+    <div id="freebox" hidden>
+      <label>指令内容</label>
+      <textarea id="freetext" rows="4" placeholder="今天要卖 603897 持仓价 32.16&#10;再看看 601898 能不能买"
+                style="width:100%;box-sizing:border-box;font:inherit;padding:9px;
+                       border-radius:9px;border:1px solid var(--line);
+                       background:var(--card);color:inherit"></textarea>
+      <div class="hint">整段加密后送回本机；<b>只做股票报告</b>，其余内容一律忽略。
+        没写股票代码的段落不会被处理。</div>
+    </div>
 
     <div id="tickerbox" hidden>
       <label>股票代码</label>
@@ -168,6 +179,35 @@ select{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:9p
       <button id="submit" class="primary" style="flex:1">开始</button>
       <button id="cancel">取消</button>
     </div>
+    <button id="toghset" hidden style="width:100%;margin-top:10px">⚙ GitHub 收件箱设置</button>
+  </div>
+</div>
+
+<!-- GitHub 通道设置。只在 Pages 上出现 —— 局域网/OCI 直连不需要令牌。 -->
+<div id="ghset" hidden>
+  <div class="sheet">
+    <div class="titlerow"><h2>GitHub 收件箱</h2></div>
+    <div class="hint">在 GitHub 上没有后端，指令改为**加密后写进私有仓库**，
+      本机每 5 分钟取一次并把结果写回来。</div>
+
+    <label>访问令牌（一般不用填）</label>
+    <input id="ghtoken" type="password" autocomplete="off" placeholder="留空即用本机下发的">
+    <div class="hint">令牌由本机<b>加密下发</b>，解锁后自动取得，<b>不需要每台设备粘贴</b>。
+      这里只在需要临时覆盖时才填 —— 填了会明文存在本机浏览器里，
+      <b>不受口令保护</b>，用完建议「清除令牌」。</div>
+
+    <label style="margin-top:12px">本机名称</label>
+    <input id="ghdev" type="text" placeholder="如：Tony 的 iPhone">
+    <div class="hint">写进<b>密文里</b>，用来在日志里区分是哪台设备提交的。
+      设备编号自动生成，看不到也不用管。</div>
+
+    <div id="ghstat" class="hint"></div>
+    <div class="row" style="margin-top:16px">
+      <button id="ghsave" class="primary" style="flex:1">保存</button>
+      <button id="ghclose">取消</button>
+    </div>
+    <button id="ghforget" style="width:100%;margin-top:10px;color:var(--bad);border-color:var(--bad)">
+      清除令牌</button>
   </div>
 </div>
 

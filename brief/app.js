@@ -8,7 +8,7 @@
  *   - After a successful unlock the unwrapped key is cached for 24 hours,
  *     then purged and the passphrase is required again.
  */
-const APP_VERSION = "6.1";
+const APP_VERSION = "6.2";
 const API = "/ipa";            // 仅路径叫 ipa，其余一律 api
 const LANDSCAPE_ZOOM = 1.28;   // 横屏整体放大倍数，想调就改这里
 const POLL_MS = 3000;          // 结果轮询间隔
@@ -259,6 +259,146 @@ async function apiStatus() {
   return r.json();
 }
 
+/* ================= GitHub 收件箱通道 =================
+ *
+ * Pages 上没有后端（`/ipa` 是 OCI 才有的），所以按需分析改走「指令文件」：
+ * 手机把指令**加密**后写进私有仓库，本机每 5 分钟取一次、跑完把结果写回来。
+ *
+ * 时间尺度和 OCI 完全不同 —— OCI 是几十秒，这里是**十几到三十分钟**
+ * （轮询 ≤5 分钟 + AI 跑 5–20 分钟 + 推送）。所以下面的超时与轮询间隔
+ * 必须按通道分别取值，否则会在结果出现之前就判定失败。
+ */
+const IS_GH = /\.github\.io$/i.test(location.hostname);
+const GH_INBOX = "daily-brief";          // 收件箱仓库（私有，无 Pages）
+const GH_API = "https://api.github.com";
+
+const waitMs = () => (IS_GH ? 45 * 60000 : MAX_WAIT_MS);
+// GitHub API 认证后 5000 次/小时；15 秒一次 = 240 次/小时，很安全
+const pollMs = () => (IS_GH ? 15000 : POLL_MS);
+
+/* 令牌来源有两条，优先本地手工粘贴的：
+ *   1. IndexedDB 里手工粘贴的（覆盖用，一般不需要）
+ *   2. inbox-token.json —— 本机用公钥#1 加密下发的，**所有设备自动共享**
+ *
+ * 走第 2 条时令牌被**口令 + 私钥#1** 保护；手工粘贴那份在 IndexedDB 里是
+ * 明文的，拿到手机不用口令就能读出来。所以第 2 条其实更安全。
+ *
+ * 只在内存里缓存：页面一关就没了，令牌不会静默沉淀到磁盘上。 */
+let _tok = null;
+async function ghTok() {
+  const local = await kvGet("ghtoken");
+  if (local) return local;
+  if (_tok) return _tok;
+  const priv = await sessionKey();
+  if (!priv) return null;                    // 没解锁就拿不到令牌，这是有意的
+  try {
+    const get = (u) => fetch(u, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))));
+    const p = await Promise.any([
+      get(`./inbox-token.json?t=${Date.now()}`),
+      get(`${rawURL("inbox-token.json")}?t=${Date.now()}`),
+    ]);
+    _tok = (await decryptPayload(p, priv)).trim();
+    return _tok;
+  } catch { return null; }                   // 本机没配令牌 → 走手工粘贴那条
+}
+
+/* 设备标识：**不做浏览器指纹**。UA/分辨率会撞车也会漂移，拿它当唯一标识
+ * 不可靠。直接发一个随机 UUID 更准，也更干净。
+ * ⚠️ 它标识的是「一次安装」——清除浏览器数据或重装后会变成新设备。 */
+async function device() {
+  let d = await kvGet("device");
+  if (!d || !d.id) {
+    d = { id: crypto.randomUUID(), name: (d && d.name) || "" };
+    await kvSet("device", d);
+  }
+  return d;
+}
+
+/* 文件名用**北京时间** MMDDHHmm，与本机 instruction_runner.py 的命名一致 */
+function stamp() {
+  const p = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai",
+    hour12: false, month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit" }).formatToParts(new Date());
+  const g = (t) => p.find((x) => x.type === t).value;
+  return `${g("month")}${g("day")}${g("hour")}${g("minute")}`;
+}
+
+/* 取当前会话密钥 K：拉那 800 字节的 inbox-key.json，用私钥#1 解开。
+ * **每次提交前都重新拉**，不依赖 App 启动时那一次 —— App 可能已经开了
+ * 几小时，手里的 kid 早就旧了。本机 keyring 留 5 把只是安全网。 */
+async function inboxKey() {
+  const priv = await sessionKey();
+  if (!priv) throw new Error("未解锁");
+  const get = (u) => fetch(u, { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))));
+  const man = await Promise.any([
+    get(`./inbox-key.json?t=${Date.now()}`),
+    get(`${rawURL("inbox-key.json")}?t=${Date.now()}`),
+  ]);
+  const raw = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, priv, b64d(man.inbox_key));
+  return { kid: man.kid,
+           k: await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt"]) };
+}
+
+async function ghFetch(path, opts = {}) {
+  const tok = await ghTok();
+  if (!tok) throw new Error("尚未设置 GitHub 令牌（按需面板底部 ⚙）");
+  return fetch(`${GH_API}/repos/${GH_USER}/${GH_INBOX}/${path}`, {
+    ...opts, cache: "no-store",
+    headers: { Authorization: `Bearer ${tok}`,
+               Accept: "application/vnd.github+json",
+               "X-GitHub-Api-Version": "2022-11-28", ...(opts.headers || {}) },
+  });
+}
+
+async function ghSubmit(body) {
+  const { kid, k } = await inboxKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  /* 设备信息放在**密文里面**。放外层等于把「有几台设备、什么时候提交、
+   * 关心哪些票」公开出去 —— 外层只留 kid，它是随机字节，不泄露任何东西。 */
+  const plain = enc.encode(JSON.stringify(
+    { ...body, device: await device(), ts: new Date().toISOString() }));
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, k, plain);
+  const env = JSON.stringify({ v: 1, kid, iv: b64e(iv), ct: b64e(ct) });
+
+  // 同一分钟内提交两次会撞名（命名精度只到分钟），撞了就加后缀重试
+  const base = stamp();
+  for (const sfx of ["", "b", "c", "d"]) {
+    const id = base + sfx;
+    const r = await ghFetch(`contents/${encodeURIComponent("AI指令-" + id + ".json")}`, {
+      method: "PUT",
+      body: JSON.stringify({ message: `指令 ${id}`, content: b64e(enc.encode(env)) }),
+    });
+    if (r.ok) return { ok: true, status: 200, json: async () => ({ id }) };
+    if (r.status !== 422) {                       // 422 = 文件已存在
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.message || `HTTP ${r.status}`);
+    }
+  }
+  throw new Error("同一分钟内提交过多，稍后再试");
+}
+
+async function ghResult(id) {
+  let r;
+  try {
+    r = await ghFetch(`contents/${encodeURIComponent("回复AI指令-" + id + ".json")}`,
+                      { headers: { Accept: "application/vnd.github.raw+json" } });
+  } catch (e) {
+    return { ok: false, status: 0, json: async () => ({ error: e.message }) };
+  }
+  // 还没写回来 —— 用 202 表达「在跑」，与 OCI 端语义对齐，上层不必分支
+  if (r.status === 404) return { ok: false, status: 202, json: async () => ({}) };
+  if (!r.ok) return { ok: false, status: r.status, json: async () => ({}) };
+  const p = await r.json();
+  return { ok: true, status: 200, json: async () => p };
+}
+
+/* 两个通道的统一入口。上层调用处不需要知道自己跑在哪里。 */
+const apiPost = (body) => (IS_GH ? ghSubmit(body) : signedPost(body));
+const apiResult = (id) => (IS_GH ? ghResult(id)
+  : fetch(`${API}/result/${id}?t=${Date.now()}`, { cache: "no-store" }));
+
 /* ---------- decrypt ---------- */
 async function decryptPayload(p, priv) {
   const aesRaw = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, priv, b64d(p.ek));
@@ -319,7 +459,7 @@ async function renderJob(id) {
 
   status(`正在取回 ${label}…`);
   let r;
-  try { r = await fetch(`${API}/result/${id}?t=${Date.now()}`, { cache: "no-store" }); }
+  try { r = await apiResult(id); }
   catch (e) { status("网络不可达：" + e.message, true); return; }
 
   if (r.status === 202) { pollJob(id, rec, null); return; }     // 还在跑，交给后台轮询
@@ -374,6 +514,10 @@ async function refreshModal(note) {
   $("hoststat").textContent = "正在检查本机状态…";
   $("hoststat").className = "hint";
   $("submit").disabled = true;
+  $("toghset").hidden = !IS_GH;
+
+  if (IS_GH) return refreshModalGH();
+
   try {
     const st = await apiStatus();
     const q = st.quota[$("reqmarket").value];
@@ -399,6 +543,63 @@ async function refreshModal(note) {
   }
 }
 
+/* GitHub 通道没有 /ipa/status。这里能验证的是「令牌是否有效、收件箱是否可写」，
+ * **验证不了本机是否在跑** —— 指令是异步的，本机可能几分钟后才来取。
+ * 所以文案不要写「本机在线」，那是 OCI 通道才能给的保证。 */
+async function refreshModalGH() {
+  $("quota").textContent = "";
+  const tok = await ghTok();
+  if (!tok) {
+    $("hoststat").textContent = "⚠ 拿不到 GitHub 令牌 —— 本机尚未下发，可点 ⚙ 手工填";
+    $("hoststat").className = "hint bad";
+    return;
+  }
+  try {
+    const r = await ghFetch("");
+    if (r.status === 401) throw new Error("令牌无效或已过期");
+    if (r.status === 404) throw new Error(`看不到 ${GH_INBOX} 仓库（令牌权限不足？）`);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    if (!j.permissions || !j.permissions.push) throw new Error("令牌没有写权限");
+    $("hoststat").innerHTML = "✅ 收件箱可写 · 指令将在几分钟内被取走"
+      + '<br><span style="opacity:.7">本机每 5 分钟取一次，出报告约 10–30 分钟</span>';
+    $("hoststat").className = "hint";
+    $("submit").disabled = false;
+  } catch (e) {
+    $("hoststat").textContent = "⚠ " + e.message;
+    $("hoststat").className = "hint bad";
+  }
+}
+
+/* ---------- GitHub 设置面板 ---------- */
+$("toghset").addEventListener("click", async () => {
+  const d = await device();
+  $("ghdev").value = d.name || "";
+  $("ghtoken").value = "";
+  const auto = !(await kvGet("ghtoken")) && !!(await ghTok());
+  $("ghstat").textContent = auto
+    ? "✅ 已自动取得本机下发的令牌 —— 无需填写。填了则以你填的为准。"
+    : ((await kvGet("ghtoken")) ? "已存有手工填写的令牌（留空则不改动）" : "");
+  $("ghset").hidden = false;
+});
+$("ghclose").addEventListener("click", () => { $("ghset").hidden = true; });
+$("ghset").addEventListener("click", (e) => { if (e.target.id === "ghset") $("ghset").hidden = true; });
+$("ghsave").addEventListener("click", async () => {
+  const t = $("ghtoken").value.trim();
+  if (t) await kvSet("ghtoken", t);
+  const d = await device();
+  await kvSet("device", { ...d, name: $("ghdev").value.trim() });
+  $("ghtoken").value = "";
+  $("ghset").hidden = true;
+  refreshModal();
+});
+$("ghforget").addEventListener("click", async () => {
+  await kvDel("ghtoken");
+  _tok = null;                               // 内存缓存一并清掉
+  $("ghstat").textContent = "已清除";
+  refreshModal();
+});
+
 $("ondemand").addEventListener("click", async () => {
   if (!(await kvGet("session"))) { status("请先解锁", true); return; }
   openModal(currentTicker
@@ -413,6 +614,7 @@ function syncMarketLock() {
   const jt = jobType();
   const isTk = jt === "ticker";
   $("tickerbox").hidden = !isTk;
+  $("freebox").hidden = jt !== "free";
   const tk = $("ticker").value.trim().toUpperCase();
   $("tomgmt").hidden = !(isTk && tk);
   const sel = $("reqmarket");
@@ -442,7 +644,12 @@ $("submit").addEventListener("click", async () => {
   const job = jobType();
   const body = { job, market: $("reqmarket").value,
                  ai: $("withai").checked, ts: Math.floor(Date.now() / 1000) };
-  if (job === "lhb") {
+  if (job === "free") {
+    const t = $("freetext").value.trim();
+    if (t.length < 4) { $("hoststat").textContent = "⚠ 指令内容太短"; $("hoststat").className = "hint bad"; return; }
+    if (!IS_GH) { $("hoststat").textContent = "⚠ 自由指令只在 GitHub 通道可用"; $("hoststat").className = "hint bad"; return; }
+    body.text = t;
+  } else if (job === "lhb") {
     body.market = "cn";                   // 龙虎榜只有 A 股有，OCI 端也会挡
   } else if (job === "ticker") {
     const t = $("ticker").value.trim().toUpperCase();
@@ -454,11 +661,12 @@ $("submit").addEventListener("click", async () => {
   }
   $("submit").disabled = true;
   try {
-    const r = await signedPost(body);
+    const r = await apiPost(body);
     const j = await r.json();
     if (!r.ok) { $("hoststat").textContent = "⚠ " + (j.error || r.status); $("hoststat").className = "hint bad"; $("submit").disabled = false; return; }
     $("modal").hidden = true;
     const label = body.job === "ticker" ? body.ticker
+                : body.job === "free" ? (body.text.slice(0, 12) + (body.text.length > 12 ? "…" : ""))
                 : body.job === "lhb" ? "龙虎榜"
                 : (body.market === "us" ? "美股简报" : "中港简报");
     // 注意顺序：body.ts 是「秒」，必须放在前面，否则会盖掉毫秒时间戳
@@ -706,16 +914,16 @@ async function pollJob(id, rec, left) {
   const tick = setInterval(() => markBusy(activeJob), 1000);
 
   try {
-    while (Date.now() - activeJob.t0 < MAX_WAIT_MS) {
+    while (Date.now() - activeJob.t0 < waitMs()) {
       if (viewingJob(id)) {
         const sec = Math.round((Date.now() - activeJob.t0) / 1000);
         status(`正在分析 ${label}…（${est}，已 ${sec}s）`
                + (left == null ? "" : ` · 今日剩 ${left}`));
       }
-      await new Promise((r) => setTimeout(r, POLL_MS));
+      await new Promise((r) => setTimeout(r, pollMs()));
 
       let res;
-      try { res = await fetch(`${API}/result/${id}?t=${Date.now()}`, { cache: "no-store" }); }
+      try { res = await apiResult(id); }
       catch { continue; }
       if (res.status === 202) continue;
       if (!res.ok) {

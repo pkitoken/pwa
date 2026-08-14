@@ -14,7 +14,7 @@
  * 改任何外壳文件都必须同时递增 sw.js 的 CACHE 与 app.js 的 APP_VERSION，
  * 否则手机会继续用旧缓存。
  */
-const CACHE = "brief-v6.1";
+const CACHE = "brief-v6.2";
 const SHELL = ["./stock.html", "./app.js", "./manifest.json",
                "./icon-192.png", "./icon-512.png"];
 
@@ -40,7 +40,7 @@ self.addEventListener("fetch", (e) => {
   if (/brief-(us|cn)\.json$/.test(url.pathname)) return;   // handled by app.js
   // 上行会话密钥：**绝不缓存**。手机提交指令前要靠它拿到当前 kid，
   // 缓存一份旧的会让 kid 落后，虽然 keyring 留了 5 把兜底，但没必要自找麻烦。
-  if (/inbox-key\.json$/.test(url.pathname)) return;
+  if (/inbox-(key|token)\.json$/.test(url.pathname)) return;
   if (url.pathname.startsWith("/ipa/")) return;             // 按需接口从不缓存
   if (url.origin !== self.location.origin) return;         // GitHub raw/API fallbacks
 
