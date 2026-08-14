@@ -8,7 +8,7 @@
  *   - After a successful unlock the unwrapped key is cached for 24 hours,
  *     then purged and the passphrase is required again.
  */
-const APP_VERSION = "6.6";
+const APP_VERSION = "6.7";
 const API = "/ipa";            // 仅路径叫 ipa，其余一律 api
 const LANDSCAPE_ZOOM = 1.28;   // 横屏整体放大倍数，想调就改这里
 const POLL_MS = 3000;          // 结果轮询间隔
@@ -482,7 +482,19 @@ $("keyfile").addEventListener("change", async (ev) => {
   const f = ev.target.files[0];
   if (!f) return;
   const pass = $("newpass").value;
-  if (pass.length < 8) { status("口令至少 8 位", true); return; }
+  /* 最少 4 位（用户 2026-08-15 要求，便于手机输入）。
+   * ⚠️ 这里和 serve.py 的 4 位**风险不是一回事**：serve.py 有失败锁定，
+   * 攻击者每天最多试 480 次；这把口令包裹的是 IndexedDB 里的私钥，
+   * 一旦有人拿到那份密文就能**离线暴力破解，没有任何速率限制**。
+   * PBKDF2-SHA256 600k 轮下，高端 GPU 约 1 万次/秒：
+   *   4 位纯数字   1 万种      → 约 1 秒
+   *   4 位小写+数字 168 万种    → 约 3 分钟
+   *   4 位大小写+数字 1478 万种 → 约 25 分钟
+   * 所以**别用纯数字**，混一个字母进去差别很大。 */
+  if (pass.length < 4) { status("口令至少 4 位", true); return; }
+  // 警告要**并进成功消息**里 —— 单独 status() 一行会被下面的「私钥已导入」
+  // 立刻覆盖掉，等于没提示
+  const weak = pass.length < 8 && /^\d+$/.test(pass);
   try {
     let buf = await f.arrayBuffer();
     const head = dec.decode(new Uint8Array(buf.slice(0, 40)));
@@ -494,7 +506,7 @@ $("keyfile").addEventListener("change", async (ev) => {
     await importPriv(buf);                        // validate before storing
     await storeKey(buf, pass);
     $("newpass").value = "";
-    status("私钥已导入");
+    status(weak ? "私钥已导入　⚠ 纯数字短口令较弱，建议混入字母" : "私钥已导入", weak);
     show("unlock");
   } catch (e) {
     status("导入失败：" + e.message + "（请确认选的是 private-pkcs8.der）", true);
