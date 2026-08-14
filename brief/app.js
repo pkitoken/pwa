@@ -8,7 +8,7 @@
  *   - After a successful unlock the unwrapped key is cached for 24 hours,
  *     then purged and the passphrase is required again.
  */
-const APP_VERSION = "6.3";
+const APP_VERSION = "6.4";
 const API = "/ipa";            // 仅路径叫 ipa，其余一律 api
 const LANDSCAPE_ZOOM = 1.28;   // 横屏整体放大倍数，想调就改这里
 const POLL_MS = 3000;          // 结果轮询间隔
@@ -982,7 +982,6 @@ async function showResult(p, label, left) {
 
 $("refresh").addEventListener("click", render);
 $("market").addEventListener("change", render);
-$("lock").addEventListener("click", async () => { await kvDel("session"); show("unlock"); status("已锁定"); });
 $("reset").addEventListener("click", async () => {
   if (!confirm("删除本机私钥与缓存？需重新导入。")) return;
   await kvDel("wrapped"); await kvDel("session");
