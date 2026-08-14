@@ -8,7 +8,7 @@
  *   - After a successful unlock the unwrapped key is cached for 24 hours,
  *     then purged and the passphrase is required again.
  */
-const APP_VERSION = "6.7";
+const APP_VERSION = "6.8";
 const API = "/ipa";            // 仅路径叫 ipa，其余一律 api
 const LANDSCAPE_ZOOM = 1.28;   // 横屏整体放大倍数，想调就改这里
 const POLL_MS = 3000;          // 结果轮询间隔
@@ -564,7 +564,21 @@ async function refreshModal(note) {
  * **验证不了本机是否在跑** —— 指令是异步的，本机可能几分钟后才来取。
  * 所以文案不要写「本机在线」，那是 OCI 通道才能给的保证。 */
 async function refreshModalGH() {
+  /* 配额由**本机**统一记账（两条路共用一个计数器），发布成 quota.json。
+   * 拿不到就留空 —— 显示不出来不该挡住提交。 */
   $("quota").textContent = "";
+  (async () => {
+    try {
+      const get = (u) => fetch(u, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))));
+      const q = (await Promise.any([
+        get(`./quota.json?t=${Date.now()}`),
+        get(`${rawURL("quota.json")}?t=${Date.now()}`),
+      ])).quota[$("reqmarket").value];
+      $("quota").textContent =
+        `今日剩余 ${q.left} / ${q.limit} 次（本机统一记账，两条路共用）`;
+    } catch { /* 取不到就不显示 */ }
+  })();
   const tok = await ghTok();
   if (!tok) {
     $("hoststat").textContent = "⚠ 拿不到 GitHub 令牌 —— 本机尚未下发，可点 ⚙ 手工填";
