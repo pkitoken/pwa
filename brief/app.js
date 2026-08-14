@@ -8,7 +8,7 @@
  *   - After a successful unlock the unwrapped key is cached for 24 hours,
  *     then purged and the passphrase is required again.
  */
-const APP_VERSION = "6.8";
+const APP_VERSION = "6.9";
 const API = "/ipa";            // 仅路径叫 ipa，其余一律 api
 const LANDSCAPE_ZOOM = 1.28;   // 横屏整体放大倍数，想调就改这里
 const POLL_MS = 3000;          // 结果轮询间隔
@@ -538,7 +538,8 @@ async function refreshModal(note) {
   try {
     const st = await apiStatus();
     const q = st.quota[$("reqmarket").value];
-    $("quota").textContent = `今日剩余 ${q.left} / ${q.limit} 次（缓存命中不计数）`;
+    $("quota").textContent =
+      `今日还可用 ${q.left} 次（已用 ${q.used}，上限 ${q.limit}；缓存命中不计数）`;
     if (!st.host_alive) {
       const mins = st.host_seen ? Math.round((st.now - st.host_seen) / 60) : null;
       $("hoststat").textContent = mins === null
@@ -575,8 +576,9 @@ async function refreshModalGH() {
         get(`./quota.json?t=${Date.now()}`),
         get(`${rawURL("quota.json")}?t=${Date.now()}`),
       ])).quota[$("reqmarket").value];
+      // 别写 "剩余 N / M" —— "50 / 50" 会被读成「用满了」
       $("quota").textContent =
-        `今日剩余 ${q.left} / ${q.limit} 次（本机统一记账，两条路共用）`;
+        `今日还可用 ${q.left} 次（已用 ${q.used}，上限 ${q.limit}；两条路共用）`;
     } catch { /* 取不到就不显示 */ }
   })();
   const tok = await ghTok();
@@ -590,15 +592,22 @@ async function refreshModalGH() {
     if (r.status === 401) throw new Error("令牌无效或已过期");
     if (r.status === 404) throw new Error(`看不到 ${GH_INBOX} 仓库（令牌权限不足？）`);
     if (!r.ok) throw new Error("HTTP " + r.status);
-    const j = await r.json();
-    if (!j.permissions || !j.permissions.push) throw new Error("令牌没有写权限");
-    $("hoststat").innerHTML = "✅ 收件箱可写 · 指令将在几分钟内被取走"
+    /* ⚠️ **不要拿 j.permissions.push 当闸门。** 那个字段是「账号对该仓库的
+     * 角色」，不是「这把令牌的权限」（2026-08-14 已被这个字段坑过一次：
+     * admin 显示 true，实际 PATCH 直接 403）。用它做判断可能在令牌完全正常时
+     * 把提交按钮锁死，而用户看不出为什么。
+     * 能读到仓库就放行；真写不进去会在提交时报出确切的 HTTP 错误。 */
+    await r.json();
+    $("hoststat").innerHTML = "✅ 收件箱可达 · 指令将在几分钟内被取走"
       + '<br><span style="opacity:.7">本机每 5 分钟取一次，出报告约 10–30 分钟</span>';
     $("hoststat").className = "hint";
     $("submit").disabled = false;
   } catch (e) {
-    $("hoststat").textContent = "⚠ " + e.message;
+    // 探测失败也**不锁死提交** —— 让用户能试，真失败时给确切错误，
+    // 好过一个说不出原因的灰按钮
+    $("hoststat").textContent = "⚠ 收件箱探测失败：" + e.message + "（仍可尝试提交）";
     $("hoststat").className = "hint bad";
+    $("submit").disabled = false;
   }
 }
 
