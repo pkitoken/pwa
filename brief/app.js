@@ -8,7 +8,7 @@
  *   - After a successful unlock the unwrapped key is cached for 24 hours,
  *     then purged and the passphrase is required again.
  */
-const APP_VERSION = "7.4";
+const APP_VERSION = "7.5";
 const API = "/ipa";            // 仅路径叫 ipa，其余一律 api
 const LANDSCAPE_ZOOM = 1.28;   // 横屏整体放大倍数，想调就改这里
 const POLL_MS = 3000;          // 结果轮询间隔
@@ -533,10 +533,25 @@ function jobType() {
   return document.querySelector('input[name=job]:checked').value;
 }
 
+/* 状态行统一走这里，自动带上通道前缀 —— 两个 App 装在同一台手机上，
+ * 光看文字分不出这条状态是 OCI 还是 GitHub 的。
+ * 正文用 textContent 拼（错误信息里可能带尖括号），只有明确需要富文本时才用 html。 */
+const CHANNEL = IS_GH ? "GitHub" : "OCI";
+function hostStat(msg, bad, html) {
+  const el = $("hoststat");
+  el.textContent = "";
+  const tag = document.createElement("b");
+  tag.style.opacity = ".65";
+  tag.textContent = `[${CHANNEL}] `;
+  el.appendChild(tag);
+  if (html) { const s = document.createElement("span"); s.innerHTML = msg; el.appendChild(s); }
+  else el.appendChild(document.createTextNode(msg));
+  el.className = bad ? "hint bad" : "hint";
+}
+
 async function refreshModal(note) {
   if (note) $("note").textContent = note; else $("note").textContent = "";
-  $("hoststat").textContent = "正在检查本机状态…";
-  $("hoststat").className = "hint";
+  hostStat("正在检查本机状态…");
   $("submit").disabled = true;
   $("toghset").hidden = !IS_GH;
 
@@ -549,21 +564,18 @@ async function refreshModal(note) {
       `今日还可用 ${q.left} 次（已用 ${q.used}，上限 ${q.limit}；缓存命中不计数）`;
     if (!st.host_alive) {
       const mins = st.host_seen ? Math.round((st.now - st.host_seen) / 60) : null;
-      $("hoststat").textContent = mins === null
-        ? "⚠ 本机从未上线，无法执行" : `⚠ 本机离线（最后在线 ${mins} 分钟前），无法执行`;
-      $("hoststat").className = "hint bad";
+      hostStat(mins === null ? "⚠ 本机从未上线，无法执行"
+                             : `⚠ 本机离线（最后在线 ${mins} 分钟前），无法执行`, true);
     } else if (q.left <= 0) {
-      $("hoststat").textContent = "⚠ 今日配额已用尽";
-      $("hoststat").className = "hint bad";
+      hostStat("⚠ 今日配额已用尽", true);
     } else {
       // busy 只作提示，**不再禁用** —— 本机现在能并发跑 2 个任务
-      $("hoststat").textContent = st.busy
-        ? "✅ 本机在线（有任务在跑，可继续提交）" : "✅ 本机在线，可以执行";
+      hostStat(st.busy ? "✅ 本机在线（有任务在跑，可继续提交）"
+                       : "✅ 本机在线，可以执行");
       $("submit").disabled = false;
     }
   } catch (e) {
-    $("hoststat").textContent = "⚠ 无法连接服务：" + e.message;
-    $("hoststat").className = "hint bad";
+    hostStat("⚠ 无法连接服务：" + e.message, true);
   }
 }
 
@@ -589,8 +601,7 @@ async function refreshModalGH() {
   })();
   const tok = await ghTok();
   if (!tok) {
-    $("hoststat").textContent = "⚠ 拿不到 GitHub 令牌 —— 本机尚未下发，可点 ⚙ 手工填";
-    $("hoststat").className = "hint bad";
+    hostStat("⚠ 拿不到 GitHub 令牌 —— 本机尚未下发，可点 ⚙ 手工填", true);
     return;
   }
   try {
@@ -604,15 +615,14 @@ async function refreshModalGH() {
      * 把提交按钮锁死，而用户看不出为什么。
      * 能读到仓库就放行；真写不进去会在提交时报出确切的 HTTP 错误。 */
     await r.json();
-    $("hoststat").innerHTML = "✅ 收件箱可达 · 指令将在几分钟内被取走"
-      + '<br><span style="opacity:.7">本机每 5 分钟取一次，出报告约 10–30 分钟</span>';
-    $("hoststat").className = "hint";
+    hostStat("✅ 收件箱可达 · 指令将在几分钟内被取走"
+      + '<br><span style="opacity:.7">本机每 5 分钟取一次，出报告约 10–30 分钟</span>',
+      false, true);
     $("submit").disabled = false;
   } catch (e) {
     // 探测失败也**不锁死提交** —— 让用户能试，真失败时给确切错误，
     // 好过一个说不出原因的灰按钮
-    $("hoststat").textContent = "⚠ 收件箱探测失败：" + e.message + "（仍可尝试提交）";
-    $("hoststat").className = "hint bad";
+    hostStat("⚠ 收件箱探测失败：" + e.message + "（仍可尝试提交）", true);
     $("submit").disabled = false;
   }
 }
@@ -692,15 +702,15 @@ $("submit").addEventListener("click", async () => {
                  ai: $("withai").checked, ts: Math.floor(Date.now() / 1000) };
   if (job === "free") {
     const t = $("freetext").value.trim();
-    if (t.length < 4) { $("hoststat").textContent = "⚠ 指令内容太短"; $("hoststat").className = "hint bad"; return; }
+    if (t.length < 4) { hostStat("⚠ 指令内容太短", true); return; }
     body.text = t;
   } else if (job === "lhb") {
     body.market = "cn";                   // 龙虎榜只有 A 股有，OCI 端也会挡
   } else if (job === "ticker") {
     const t = $("ticker").value.trim().toUpperCase();
-    if (!/^[A-Z0-9][A-Z0-9.\-]{0,11}$/.test(t)) { $("hoststat").textContent = "⚠ 代码格式不合法"; $("hoststat").className = "hint bad"; return; }
+    if (!/^[A-Z0-9][A-Z0-9.\-]{0,11}$/.test(t)) { hostStat("⚠ 代码格式不合法", true); return; }
     const m = tickerMarket(t);
-    if (!m) { $("hoststat").textContent = "⚠ 无法识别该代码属于哪个市场"; $("hoststat").className = "hint bad"; return; }
+    if (!m) { hostStat("⚠ 无法识别该代码属于哪个市场", true); return; }
     body.ticker = t;
     body.market = m;                      // 市场由代码决定，配额也记到正确的市场
   }
@@ -708,7 +718,7 @@ $("submit").addEventListener("click", async () => {
   try {
     const r = await apiPost(body);
     const j = await r.json();
-    if (!r.ok) { $("hoststat").textContent = "⚠ " + (j.error || r.status); $("hoststat").className = "hint bad"; $("submit").disabled = false; return; }
+    if (!r.ok) { hostStat("⚠ " + (j.error || r.status), true); $("submit").disabled = false; return; }
     $("modal").hidden = true;
     $("submit").disabled = false;      // 立刻恢复：任务在后台跑，不该占住入口
     const label = body.job === "ticker" ? body.ticker
@@ -721,7 +731,7 @@ $("submit").addEventListener("click", async () => {
     await rebuildMarketSelect("job:" + j.id);
     pollJob(j.id, rec, j.left);
   } catch (e) {
-    $("hoststat").textContent = "⚠ " + e.message; $("hoststat").className = "hint bad"; $("submit").disabled = false;
+    hostStat("⚠ " + e.message, true); $("submit").disabled = false;
   }
 });
 
