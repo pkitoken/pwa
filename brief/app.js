@@ -8,7 +8,7 @@
  *   - After a successful unlock the unwrapped key is cached for 24 hours,
  *     then purged and the passphrase is required again.
  */
-const APP_VERSION = "7.3";
+const APP_VERSION = "7.4";
 const API = "/ipa";            // 仅路径叫 ipa，其余一律 api
 const LANDSCAPE_ZOOM = 1.28;   // 横屏整体放大倍数，想调就改这里
 const POLL_MS = 3000;          // 结果轮询间隔
@@ -103,6 +103,10 @@ async function sessionKey() {
  * 实测已不成立（raw / Pages / api.github.com 全部可达）。封锁状态会来回变，
  * 所以不再假设哪个通，改成并发发出、谁先回用谁。见下方 fetchPayload()。 */
 const MARKETS = { us: "🇺🇸 美股", cn: "🇨🇳 中港股" };
+// 主界面最近一次选中的**真实市场**（`job:xxx` 不算）。「按需」弹窗据此预选。
+// 声明放这里而不是靠近使用处 —— let 有暂时性死区，虽然实际调用时机安全，
+// 但把声明写在引用它的函数后面很容易在后续改动中踩雷。
+let lastRealMarket = null;
 // 与 code/ticker_report.py 的 resolve() 规则一致：市场由代码格式决定，不由用户选
 function tickerMarket(t) {
   const c = String(t).trim().toUpperCase();
@@ -428,6 +432,7 @@ function status(msg, bad) {
 async function render() {
   const v = $("market").value;
   await kvSet("lastMarket", v);
+  if (!v.startsWith("job:")) lastRealMarket = v;
 
   if (v.startsWith("job:")) return renderJob(v.slice(4));
 
@@ -879,7 +884,14 @@ function openModal({ ticker = "", name = "", note = "" } = {}) {
   $("ticker").value = ticker;
   $("modaltitle").textContent = isTk ? (nm ? `分析 ${nm} ${ticker}` : `分析 ${ticker}`)
                                      : "按需运行";
-  if (!isTk) $("reqmarket").value = $("market").value.startsWith("job:") ? "cn" : $("market").value;
+  // 跟随主界面下拉框当前选的市场。主界面若正显示某个按需任务（job:xxx），
+  // 就退回上一次真正选过的市场 —— 原来这里硬编码 "cn"，
+  // 于是「看完一个美股任务再点按需」会莫名其妙跳到中港股。
+  if (!isTk) {
+    const cur = $("market").value;
+    $("reqmarket").value = cur.startsWith("job:")
+      ? (lastRealMarket || "cn") : cur;
+  }
   syncMarketLock();
   $("modal").hidden = false;
   refreshModal(note);
@@ -1071,6 +1083,7 @@ $("reset").addEventListener("click", async () => {
     } catch {}
   }
   const last = await kvGet("lastMarket");
+  if (last && !String(last).startsWith("job:")) lastRealMarket = last;
   await rebuildMarketSelect(last);
   // 退出/锁屏期间可能有任务还在跑，回来继续轮询
   // 恢复**全部**未完成任务（原来有个 break，只恢复第一个，其余永远不会被取回）。

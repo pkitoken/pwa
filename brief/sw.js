@@ -14,7 +14,7 @@
  * 改任何外壳文件都必须同时递增 sw.js 的 CACHE 与 app.js 的 APP_VERSION，
  * 否则手机会继续用旧缓存。
  */
-const CACHE = "brief-v7.3";
+const CACHE = "brief-v7.4";
 const SHELL = ["./stock.html", "./app.js", "./manifest.json",
                "./icon-192.png", "./icon-512.png"];
 

@@ -152,6 +152,13 @@ select{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:9p
     <div id="note" class="hint" style="color:var(--warn)"></div>
     <div id="hoststat" class="hint"></div>
 
+    <label>市场</label>
+    <div id="mkthint" class="hint" style="margin:0 0 5px"></div>
+    <select id="reqmarket">
+      <option value="cn">🇨🇳 中港股</option>
+      <option value="us">🇺🇸 美股</option>
+    </select>
+
     <label class="row2"><input type="radio" name="job" value="brief" checked><span>重跑简报</span></label>
     <label class="row2"><input type="radio" name="job" value="ticker"><span>个股分析</span></label>
     <label class="row2"><input type="radio" name="job" value="lhb"><span>龙虎榜（A 股全榜）</span></label>
@@ -173,13 +180,6 @@ select{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:9p
              placeholder="AMZN / 00384 / 600118">
       <div class="hint">美股用字母，港股 4–5 位数字，A 股 6 位数字</div>
     </div>
-
-    <label>市场</label>
-    <div id="mkthint" class="hint" style="margin:0 0 5px"></div>
-    <select id="reqmarket">
-      <option value="cn">🇨🇳 中港股</option>
-      <option value="us">🇺🇸 美股</option>
-    </select>
 
     <label class="row2" style="margin-top:14px">
       <input type="checkbox" id="withai" checked><span>带 AI 复核（约多 60–90 秒）</span></label>
