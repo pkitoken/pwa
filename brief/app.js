@@ -8,7 +8,7 @@
  *   - After a successful unlock the unwrapped key is cached for 24 hours,
  *     then purged and the passphrase is required again.
  */
-const APP_VERSION = "7.2";
+const APP_VERSION = "7.3";
 const API = "/ipa";            // 仅路径叫 ipa，其余一律 api
 const LANDSCAPE_ZOOM = 1.28;   // 横屏整体放大倍数，想调就改这里
 const POLL_MS = 3000;          // 结果轮询间隔
@@ -735,23 +735,32 @@ const CLICK_JS =
   "mkt:el.getAttribute('data-mkt'),nm:el.getAttribute('data-nm')||''},'*');});" +
   // 把内容高度报给父页面 —— 父页面据此撑开 iframe，让整页滚动而不是 iframe 内滚，
   // 这样双指缩放才是正常的「放大网页」体验
-  "function H(){var w=document.body.__w,h;" +
-  "if(w){h=w.getBoundingClientRect().height;}" +          // transform 后的实际高度
-  "else{h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);}" +
-  "parent.postMessage({t:'h',h:Math.ceil(h)+8},'*');}" +
+  // ⚠️ **只量包裹层，绝不量 documentElement.scrollHeight。**
+  // iframe 内 documentElement.scrollHeight **不会小于 iframe 自身高度**，
+  // 而父页面正是根据上报值去设 iframe 高度 —— 再加上每次 +8 的余量，
+  // 就成了「父页面撑高 → ResizeObserver 触发 → 量到更大 → 再撑高」的正反馈，
+  // 结果就是内容早就结束了、滚动条还剩一大截空白（2026-08-15 iPhone 上出现）。
+  // 包裹层的高度只取决于内容，与 iframe 多高无关，所以不会自激。
+  "function H(){var w=W();" +
+  "parent.postMessage({t:'h',h:Math.ceil(w.getBoundingClientRect().height)},'*');}" +
   // iframe 内的 orientation 媒体查询按 iframe 自身尺寸算（内容很高 = 永远「竖」），
   // 所以放大倍数必须由父页面下发
   // 用 transform:scale 而非 zoom —— Safari 对 zoom 支持不稳定。
   // 把包裹层宽度设为 100/z%，再放大 z 倍，视觉等同 zoom：内容按新宽度重排，不横向溢出。
   "function W(){var b=document.body;if(!b.__w){var w=document.createElement('div');" +
   "while(b.firstChild)w.appendChild(b.firstChild);b.appendChild(w);b.__w=w;}return b.__w;}" +
+  // 立刻建好 —— 原来要等父页面下发 zoom 才建，在那之前 H() 只能退回去量
+  // documentElement，正好落进上面说的正反馈里
+  "W();" +
   "function Z(z){var w=W();if(z===1){w.removeAttribute('style');}else{" +
   "w.style.transformOrigin='top left';w.style.width=(100/z)+'%';" +
   "w.style.transform='scale('+z+')';}setTimeout(H,50);setTimeout(H,300);}" +
   "addEventListener('message',function(e){var d=e.data;if(!d||d.t!=='zoom')return;Z(d.z);});" +
   "addEventListener('load',H);addEventListener('resize',H);" +
   "setTimeout(H,60);setTimeout(H,400);setTimeout(H,1200);" +
-  "if(window.ResizeObserver)new ResizeObserver(H).observe(document.documentElement);" +
+  // 观察**包裹层**而不是 documentElement：前者只在内容重排时变，后者在父页面
+  // 改 iframe 高度时也会变 —— 那正是自激的来源
+  "if(window.ResizeObserver)new ResizeObserver(H).observe(W());" +
   "</scr" + "ipt>";
 
 /* 横屏放大：用 zoom 而非改字号 —— 内容会按新宽度重新排版，不会横向溢出。
@@ -819,7 +828,11 @@ window.addEventListener("message", (e) => {
   if (!d) return;
   if (d.t === "tk") onTicker(d.tk, d.mkt, d.nm);
   else if (d.t === "h" && d.h > 0) {
-    $("frame").style.height = Math.ceil(d.h) + "px";
+    // 余量加在**父页面**，不进入上报值 —— 否则每轮 +8 会被重新量到，形成棘轮
+    const want = Math.ceil(d.h) + 8;
+    const cur = parseFloat($("frame").style.height) || 0;
+    if (Math.abs(want - cur) <= 2) return;      // 收敛保护：差 2px 以内不动
+    $("frame").style.height = want + "px";
     if (!$("frame").dataset.zoomed) { $("frame").dataset.zoomed = "1"; pushZoom(); }
   }
 });
