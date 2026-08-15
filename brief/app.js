@@ -8,7 +8,7 @@
  *   - After a successful unlock the unwrapped key is cached for 24 hours,
  *     then purged and the passphrase is required again.
  */
-const APP_VERSION = "6.9";
+const APP_VERSION = "7.0";
 const API = "/ipa";            // 仅路径叫 ipa，其余一律 api
 const LANDSCAPE_ZOOM = 1.28;   // 横屏整体放大倍数，想调就改这里
 const POLL_MS = 3000;          // 结果轮询间隔
@@ -687,7 +687,8 @@ $("submit").addEventListener("click", async () => {
   if (job === "free") {
     const t = $("freetext").value.trim();
     if (t.length < 4) { $("hoststat").textContent = "⚠ 指令内容太短"; $("hoststat").className = "hint bad"; return; }
-    if (!IS_GH) { $("hoststat").textContent = "⚠ 自由指令只在 GitHub 通道可用"; $("hoststat").className = "hint bad"; return; }
+    // 兜底：选项在非 GitHub 环境已被隐藏，正常走不到这里
+    if (!IS_GH) { $("hoststat").textContent = "⚠ 本通道不支持自由指令"; $("hoststat").className = "hint bad"; return; }
     body.text = t;
   } else if (job === "lhb") {
     body.market = "cn";                   // 龙虎榜只有 A 股有，OCI 端也会挡
@@ -1067,6 +1068,22 @@ $("reset").addEventListener("click", async () => {
  * ⚠️ 而且 iOS 上**从主屏幕启动的独立应用与浏览器的存储是分开的** ——
  * 私钥存在 IndexedDB 里，所以装完要重新导入一次。这条必须提前说，
  * 否则用户装完发现要重新设置，会以为坏了。 */
+/* 「自由指令」只有 GitHub 那条路支持 —— OCI 后端只认 brief/ticker/watchlist/lhb
+ * （api_server.py:237），而且那条路的请求 5 分钟不取走就作废、客户端只等 4 分钟，
+ * 而自由指令动辄跑 10–30 分钟，本来也塞不进去。
+ * **既然用不了就别显示。** 摆出来再在提交时报错，是最糟的做法。 */
+if (!IS_GH) {
+  const el = document.querySelector('input[name=job][value=free]');
+  if (el) {
+    if (el.checked) {                      // 万一它是选中态，退回默认项
+      const b = document.querySelector('input[name=job][value=brief]');
+      if (b) b.checked = true;
+    }
+    const row = el.closest("label");
+    if (row) row.hidden = true;
+  }
+}
+
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
   || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const standalone = window.matchMedia("(display-mode: standalone)").matches
