@@ -8,7 +8,7 @@
  *   - After a successful unlock the unwrapped key is cached for 24 hours,
  *     then purged and the passphrase is required again.
  */
-const APP_VERSION = "7.5";
+const APP_VERSION = "7.6";
 const API = "/ipa";            // 仅路径叫 ipa，其余一律 api
 const LANDSCAPE_ZOOM = 1.28;   // 横屏整体放大倍数，想调就改这里
 const POLL_MS = 3000;          // 结果轮询间隔
@@ -418,6 +418,50 @@ async function decryptPayload(p, priv) {
   return dec.decode(plain);
 }
 
+/* ---------- 分享 ----------
+ * 用 Web Share API 把报告当成 .html 文件交给系统分享面板。报告是自包含的
+ * （样式内嵌、无外部引用），存下来离线也能看。
+ * 需要 HTTPS + 用户手势 —— 三个部署地址都是 HTTPS，点按钮就是手势。 */
+function setReport(html, name) {
+  const safe = String(name).replace(/[^\w\u4e00-\u9fa5.\- ]+/g, "").trim();
+  lastReport = { html, name: safe.slice(0, 40) || "报告" };
+  $("sharebar").hidden = !(navigator.share || navigator.clipboard);
+}
+
+function reportAsText(html) {
+  return html.replace(/<style[^]*?<\/style>/gi, "")
+             .replace(/<script[^]*?<\/script>/gi, "")
+             .replace(/<\/(h[1-6]|p|tr|li|div)>/gi, "\n")
+             .replace(/<[^>]+>/g, " ")
+             .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+             .replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
+}
+
+$("share").addEventListener("click", async () => {
+  if (!lastReport) return;
+  const stamp = new Date().toISOString().slice(0, 10);
+  const fname = lastReport.name + "-" + stamp + ".html";
+  try {
+    if (navigator.canShare && navigator.share) {
+      const f = new File([lastReport.html], fname, { type: "text/html" });
+      if (navigator.canShare({ files: [f] })) {
+        await navigator.share({ files: [f], title: lastReport.name });
+        return;
+      }
+    }
+    if (navigator.share) {                       // 目标不收文件时退成纯文本
+      await navigator.share({ title: lastReport.name,
+                              text: reportAsText(lastReport.html).slice(0, 8000) });
+      return;
+    }
+    await navigator.clipboard.writeText(lastReport.html);
+    status("已复制报告 HTML 到剪贴板");
+  } catch (e) {
+    if (e && e.name === "AbortError") return;    // 用户自己取消，不算错误
+    status("分享失败：" + e.message, true);
+  }
+});
+
 /* ---------- UI ---------- */
 function show(view) {
   ["setup", "unlock", "content"].forEach((v) => $(v).hidden = v !== view);
@@ -450,6 +494,7 @@ async function render() {
     $("frame").style.height = "60vh";                     // 先给个临时高度，等脚本报回真实值
     delete $("frame").dataset.zoomed;
     $("frame").srcdoc = injectClicks(brief);
+    setReport(brief, MARKETS[v].replace(/[^\u4e00-\u9fa5A-Za-z]/g, "") + "简报");
     show("content");
     await buildChipsFrom(brief, v);
     const tz = res.payload.tz === "Asia/Shanghai" ? "北京时间" : "纽约时间";
@@ -971,6 +1016,9 @@ $("msave").addEventListener("click", async () => {
  * 而「按需」按钮还被改成「分析中 42s」—— 相当于把入口占住了。
  * 用户 2026-08-15：不要挡住按钮，任务后台跑完自己进下拉框。 */
 const activeJobs = new Map();          // id -> {id, label, t0}
+/* iframe 带 sandbox="allow-scripts"，父页面**读不回**里面的内容，
+ * 所以渲染时顺手留一份供分享用。只在内存里，不落盘。 */
+let lastReport = null;         // {html, name}
 let currentTicker = null;      // 当前展示的是哪只票的报告；看简报时为 null
 const tickerNames = {};        // 代码 -> 公司名，用于弹窗标题
 
@@ -1049,7 +1097,9 @@ async function showResult(p, label, left) {
   try {
     $("frame").style.height = "60vh";
     delete $("frame").dataset.zoomed;
-    $("frame").srcdoc = injectClicks(await decryptPayload(p, priv));
+    const jobHtml = await decryptPayload(p, priv);
+    $("frame").srcdoc = injectClicks(jobHtml);
+    setReport(jobHtml, String(label));
     show("content");
     const tag = p.cached ? `缓存 ${p.cache_age_min} 分钟前` : "刚生成";
     status(`📊 ${label} · ${tag}`

@@ -256,6 +256,13 @@ select{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:9p
 <section id="content" hidden style="padding:0;max-width:none">
   <div id="chips" hidden></div>
   <iframe id="frame" sandbox="allow-scripts"></iframe>
+  <!-- 分享按钮放在 iframe **外面**：iframe 是 sandbox="allow-scripts"，
+       里面调不了 navigator.share。报告是整页滚动（iframe 被撑到完整高度），
+       所以这里在视觉上就是正文末尾。 -->
+  <div id="sharebar" hidden style="padding:14px;text-align:center">
+    <button id="share" style="width:100%;max-width:420px;padding:11px">📤 分享这份报告</button>
+    <div class="hint" style="margin-top:6px">分享出去的是解密后的明文，含持仓与成本</div>
+  </div>
 </section>
 
 <script src="./app.js"></script>
