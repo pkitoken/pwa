@@ -8,7 +8,7 @@
  *   - After a successful unlock the unwrapped key is cached for 24 hours,
  *     then purged and the passphrase is required again.
  */
-const APP_VERSION = "7.1";
+const APP_VERSION = "7.2";
 const API = "/ipa";            // 仅路径叫 ipa，其余一律 api
 const LANDSCAPE_ZOOM = 1.28;   // 横屏整体放大倍数，想调就改这里
 const POLL_MS = 3000;          // 结果轮询间隔
@@ -272,7 +272,9 @@ const IS_GH = /\.github\.io$/i.test(location.hostname);
 const GH_INBOX = "daily-brief";          // 收件箱仓库（私有，无 Pages）
 const GH_API = "https://api.github.com";
 
-const waitMs = () => (IS_GH ? 45 * 60000 : MAX_WAIT_MS);
+// 自由指令无论走哪条路都可能跑十几分钟，不能用 OCI 那 4 分钟的尺度
+const waitMs = (rec) =>
+  (IS_GH || (rec && rec.job === "free")) ? 45 * 60000 : MAX_WAIT_MS;
 // GitHub API 认证后 5000 次/小时；15 秒一次 = 240 次/小时，很安全
 const pollMs = () => (IS_GH ? 15000 : POLL_MS);
 
@@ -545,14 +547,13 @@ async function refreshModal(note) {
       $("hoststat").textContent = mins === null
         ? "⚠ 本机从未上线，无法执行" : `⚠ 本机离线（最后在线 ${mins} 分钟前），无法执行`;
       $("hoststat").className = "hint bad";
-    } else if (st.busy) {
-      $("hoststat").textContent = "⚠ 本机正忙，请稍后再试";
-      $("hoststat").className = "hint bad";
     } else if (q.left <= 0) {
       $("hoststat").textContent = "⚠ 今日配额已用尽";
       $("hoststat").className = "hint bad";
     } else {
-      $("hoststat").textContent = "✅ 本机在线，可以执行";
+      // busy 只作提示，**不再禁用** —— 本机现在能并发跑 2 个任务
+      $("hoststat").textContent = st.busy
+        ? "✅ 本机在线（有任务在跑，可继续提交）" : "✅ 本机在线，可以执行";
       $("submit").disabled = false;
     }
   } catch (e) {
@@ -687,8 +688,6 @@ $("submit").addEventListener("click", async () => {
   if (job === "free") {
     const t = $("freetext").value.trim();
     if (t.length < 4) { $("hoststat").textContent = "⚠ 指令内容太短"; $("hoststat").className = "hint bad"; return; }
-    // 兜底：选项在非 GitHub 环境已被隐藏，正常走不到这里
-    if (!IS_GH) { $("hoststat").textContent = "⚠ 本通道不支持自由指令"; $("hoststat").className = "hint bad"; return; }
     body.text = t;
   } else if (job === "lhb") {
     body.market = "cn";                   // 龙虎榜只有 A 股有，OCI 端也会挡
@@ -954,14 +953,15 @@ function viewingJob(id) { return $("market").value === "job:" + id; }
 async function pollJob(id, rec, left) {
   if (activeJobs.has(id)) return;                       // 已在轮询，不重复起
   const label = rec ? rec.label : id;
-  const est = IS_GH ? "约 10–30 分钟" : ((rec && rec.ai) ? "约 60–90 秒" : "约 10 秒");
+  const est = (IS_GH || (rec && rec.job === "free")) ? "约 10–30 分钟"
+            : ((rec && rec.ai) ? "约 60–90 秒" : "约 10 秒");
   const job = { id, label, t0: Date.now() };
   activeJobs.set(id, job);
   markBusy();
   const tick = setInterval(markBusy, 1000);
 
   try {
-    while (Date.now() - job.t0 < waitMs()) {
+    while (Date.now() - job.t0 < waitMs(rec)) {
       if (viewingJob(id)) {
         const sec = Math.round((Date.now() - job.t0) / 1000);
         status(`正在分析 ${label}…（${est}，已 ${sec}s）`
@@ -1076,21 +1076,8 @@ $("reset").addEventListener("click", async () => {
  * ⚠️ 而且 iOS 上**从主屏幕启动的独立应用与浏览器的存储是分开的** ——
  * 私钥存在 IndexedDB 里，所以装完要重新导入一次。这条必须提前说，
  * 否则用户装完发现要重新设置，会以为坏了。 */
-/* 「自由指令」只有 GitHub 那条路支持 —— OCI 后端只认 brief/ticker/watchlist/lhb
- * （api_server.py:237），而且那条路的请求 5 分钟不取走就作废、客户端只等 4 分钟，
- * 而自由指令动辄跑 10–30 分钟，本来也塞不进去。
- * **既然用不了就别显示。** 摆出来再在提交时报错，是最糟的做法。 */
-if (!IS_GH) {
-  const el = document.querySelector('input[name=job][value=free]');
-  if (el) {
-    if (el.checked) {                      // 万一它是选中态，退回默认项
-      const b = document.querySelector('input[name=job][value=brief]');
-      if (b) b.checked = true;
-    }
-    const row = el.closest("label");
-    if (row) row.hidden = true;
-  }
-}
+/* 「自由指令」两条路都支持了（2026-08-15 起 OCI 端也放行了 job:"free"，
+ * 并把 .taken 的宽限从 5 分钟提到 45 分钟）。不再隐藏。 */
 
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
   || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
