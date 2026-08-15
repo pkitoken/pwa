@@ -8,7 +8,7 @@
  *   - After a successful unlock the unwrapped key is cached for 24 hours,
  *     then purged and the passphrase is required again.
  */
-const APP_VERSION = "7.0";
+const APP_VERSION = "7.1";
 const API = "/ipa";            // 仅路径叫 ipa，其余一律 api
 const LANDSCAPE_ZOOM = 1.28;   // 横屏整体放大倍数，想调就改这里
 const POLL_MS = 3000;          // 结果轮询间隔
@@ -706,6 +706,7 @@ $("submit").addEventListener("click", async () => {
     const j = await r.json();
     if (!r.ok) { $("hoststat").textContent = "⚠ " + (j.error || r.status); $("hoststat").className = "hint bad"; $("submit").disabled = false; return; }
     $("modal").hidden = true;
+    $("submit").disabled = false;      // 立刻恢复：任务在后台跑，不该占住入口
     const label = body.job === "ticker" ? body.ticker
                 : body.job === "free" ? (body.text.slice(0, 12) + (body.text.length > 12 ? "…" : ""))
                 : body.job === "lhb" ? "龙虎榜"
@@ -932,32 +933,37 @@ $("msave").addEventListener("click", async () => {
 /* ---------- 后台轮询：与「当前在看什么」解耦 ----------
  * 任务一旦提交就在后台轮询到底。切换下拉框、点刷新、退出重进都不会打断它，
  * 也不会重复起第二个轮询。进度常驻显示在「按需」按钮上。 */
-let activeJob = null;
+/* 可以同时挂多个任务。原来是单个 activeJob，跑着一个就没法再提第二个，
+ * 而「按需」按钮还被改成「分析中 42s」—— 相当于把入口占住了。
+ * 用户 2026-08-15：不要挡住按钮，任务后台跑完自己进下拉框。 */
+const activeJobs = new Map();          // id -> {id, label, t0}
 let currentTicker = null;      // 当前展示的是哪只票的报告；看简报时为 null
 const tickerNames = {};        // 代码 -> 公司名，用于弹窗标题
 
-function markBusy(job) {
+function markBusy() {
   const b = $("ondemand");
-  if (!job) { b.textContent = "按需"; b.classList.remove("busy"); return; }
-  const sec = Math.round((Date.now() - job.t0) / 1000);
-  b.textContent = `分析中 ${sec}s`;
-  b.classList.add("busy");
+  const n = activeJobs.size;
+  // **按钮文字保持「按需」，永远可点** —— 只用一个角标表示后台还有几个在跑
+  b.textContent = n ? `按需 ⏳${n}` : "按需";
+  b.classList.toggle("busy", n > 0);
+  b.disabled = false;
 }
 
 function viewingJob(id) { return $("market").value === "job:" + id; }
 
 async function pollJob(id, rec, left) {
-  if (activeJob && activeJob.id === id) return;          // 已在轮询，不重复起
+  if (activeJobs.has(id)) return;                       // 已在轮询，不重复起
   const label = rec ? rec.label : id;
-  const est = (rec && rec.ai) ? "约 60–90 秒" : "约 10 秒";
-  activeJob = { id, label, t0: Date.now() };
-  markBusy(activeJob);
-  const tick = setInterval(() => markBusy(activeJob), 1000);
+  const est = IS_GH ? "约 10–30 分钟" : ((rec && rec.ai) ? "约 60–90 秒" : "约 10 秒");
+  const job = { id, label, t0: Date.now() };
+  activeJobs.set(id, job);
+  markBusy();
+  const tick = setInterval(markBusy, 1000);
 
   try {
-    while (Date.now() - activeJob.t0 < waitMs()) {
+    while (Date.now() - job.t0 < waitMs()) {
       if (viewingJob(id)) {
-        const sec = Math.round((Date.now() - activeJob.t0) / 1000);
+        const sec = Math.round((Date.now() - job.t0) / 1000);
         status(`正在分析 ${label}…（${est}，已 ${sec}s）`
                + (left == null ? "" : ` · 今日剩 ${left}`));
       }
@@ -993,8 +999,8 @@ async function pollJob(id, rec, left) {
     status(`${label} 仍在运行，稍后从下拉框取回（结果保留 48 小时）`, true);
   } finally {
     clearInterval(tick);
-    activeJob = null;
-    markBusy(null);
+    activeJobs.delete(id);
+    markBusy();
   }
 }
 
@@ -1054,7 +1060,9 @@ $("reset").addEventListener("click", async () => {
   const last = await kvGet("lastMarket");
   await rebuildMarketSelect(last);
   // 退出/锁屏期间可能有任务还在跑，回来继续轮询
-  for (const x of await histGet()) if (!x.done) { pollJob(x.id, x, null); break; }
+  // 恢复**全部**未完成任务（原来有个 break，只恢复第一个，其余永远不会被取回）。
+  // 关掉 App 不会取消任务 —— 活是本机在干，这里只是重新接上轮询。
+  for (const x of await histGet()) if (!x.done) pollJob(x.id, x, null);
   if (!(await kvGet("wrapped"))) { show("setup"); return; }
   if (await sessionKey()) { await render(); } else { show("unlock"); }
 })();
