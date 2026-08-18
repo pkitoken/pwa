@@ -294,12 +294,12 @@ async function loadRoster(quiet) {
   const raw = await S.readJson(st.cfg, 'roster.json');
   if (!raw || !raw.body) throw new Error('仓库里没有 roster.json');
 
-  if (!ADMIN_PUB) {
-    if (!quiet) toast('警告：应用里没写管理员公钥，花名册未验签');
-  } else {
-    const ok = await C.verifyRoster(raw.body, raw.sig || '', ADMIN_PUB);
-    if (!ok) throw new Error('花名册签名不对——有人动过它，已拒绝使用');
-  }
+  /* 没钉公钥就直接拒绝，不再「跳过验签照常用」。
+     验签这种东西一旦悄悄失效，界面看着一切正常，反而最危险——
+     1.11 之前就是这样：ADMIN_PUB 为空时花名册照收，谁也看不出来。 */
+  if (!ADMIN_PUB) throw new Error('这个版本没有钉入管理员公钥，拒绝使用任何花名册');
+  const ok = await C.verifyRoster(raw.body, raw.sig || '', ADMIN_PUB);
+  if (!ok) throw new Error('花名册签名不对——有人动过它，已拒绝使用');
 
   const body = JSON.parse(raw.body);
   for (const p of body.people) p.kid = await C.kidOf(p.dh);
