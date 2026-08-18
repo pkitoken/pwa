@@ -829,13 +829,24 @@ async function saveRepo() {
 
 /* ------------------------------------------------------- Service Worker */
 
+/* 先问 service worker；它还没接管（比如第一次打开）就直接把 sw.js 拉下来
+   读里面的 VERSION——总比显示一个「—」强，而那恰恰是你最想知道版本的时候。 */
 function swVersion() {
   return new Promise((res) => {
-    if (!navigator.serviceWorker || !navigator.serviceWorker.controller) return res('—');
+    const fallback = () => {
+      fetch('sw.js', { cache: 'no-store' })
+        .then((r) => r.text())
+        .then((t) => {
+          const m = t.match(/VERSION\s*=\s*'([^']+)'/);
+          res(m ? m[1] : '—');
+        })
+        .catch(() => res('—'));
+    };
+    if (!navigator.serviceWorker || !navigator.serviceWorker.controller) return fallback();
     const ch = new MessageChannel();
     ch.port1.onmessage = (e) => res(e.data);
     navigator.serviceWorker.controller.postMessage({ type: 'VERSION' }, [ch.port2]);
-    setTimeout(() => res('—'), 1500);
+    setTimeout(fallback, 1500);
   });
 }
 
