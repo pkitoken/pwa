@@ -13,7 +13,7 @@ import { qrSvg } from './qr.js';
 /* 管理员验签公钥（base64url 原始 P-256 公钥）。花名册必须由这把钥匙签过，
    否则应用拒绝使用——否则任何拿到令牌的人都能把别人的公钥换成自己的，
    从此静默接收本该发给别人的文件。用 admin.html 生成后粘到这里。 */
-const ADMIN_PUB = '';
+const ADMIN_PUB = 'BI4IlzF4W6nOF6Ew9yu541CIAJg5lwKsVldXVLihsQHG7_tkAb9RpW2ULGcHDrmDJgdzM07-5cXu2l5ZsyBhZFM';
 
 const MAX_FILE = 20 * 1024 * 1024;   /* 单个文件上限；base64 后约 27 MB，
                                         再大手机内存和 API 都不舒服 */
