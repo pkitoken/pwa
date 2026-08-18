@@ -352,9 +352,32 @@ async function pickupToken() {
     }
     const tok = C.fromUtf8(r.data).trim();
     if (tok && tok !== st.cfg.token) {
+      const old = st.cfg.token;
       st.cfg.token = tok;
+
+      /* 立刻用新凭据写一条回执。一举两得：
+         一是先验证新的确实能用，不能用就退回旧的——否则管理员发错了东西，
+         所有人会在旧的被吊销那一刻集体失联，而且谁都不知道为什么；
+         二是管理员那边能看到「谁已经换过来了」，不必靠猜来决定什么时候
+         去吊销旧的那条。 */
+      try {
+        await S.transact(st.cfg, async (idx, ctx) => {
+          const path = 'claims/' + st.id.uid + '.json';
+          const c = (await ctx.read(path)) ||
+                    { uid: st.id.uid, max: 4, nonces: {}, devices: [] };
+          c.tokenTs = t.ts;
+          return {
+            message: '换用新凭据 ' + st.id.uid,
+            puts: [{ path: path, b64: C.b64(C.utf8(JSON.stringify(c, null, 1))) }]
+          };
+        });
+      } catch (e) {
+        st.cfg.token = old;                 /* 新的用不了，退回去，下次再试 */
+        toast('收到一份新凭据，但它用不了——先继续用旧的', 5000);
+        return;
+      }
       await S.kvSet('repo', st.cfg);
-      toast('访问令牌已自动更新');
+      toast('访问凭据已自动更新');
     }
     await S.kvSet('tokenTs', t.ts);
   } catch (e) { /* 解不开就算了，下次再说 */ }
