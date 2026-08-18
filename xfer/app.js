@@ -877,11 +877,7 @@ function renderSettings() {
   const self = me();
   $('setGroups').textContent = self ? (self.groups || []).join('、') || '（无）' : '—';
 
-  if (st.cfg) {
-    $('setRepo').textContent = st.cfg.owner ? st.cfg.owner + '/' + st.cfg.repo : '—';
-    $('setBranch').textContent = st.cfg.branch || 'main';
-    $('setToken').value = st.cfg.token || '';
-  }
+  if (st.cfg) $('setToken').value = st.cfg.token || '';
   $('setDev').textContent = st.dev || '—';
   renderDevices();
   $('rosterInfo').textContent = st.roster
