@@ -371,6 +371,7 @@ async function refreshInbox() {
        缓存的那份能用一辈子。拉不到就继续用旧的，不影响收文件。 */
     try { await loadRoster(true); renderRecips(); } catch (e) { /* 收件不强依赖花名册 */ }
     await pickupToken();
+    await flushAcks();
     const idx = await S.readJson(st.cfg, 'index.json') || { v: 1, entries: [] };
     st.index = idx;
     await purgeIfNeeded(idx);
@@ -480,7 +481,11 @@ async function grab(e, btn) {
   const label = btn.textContent;
   btn.textContent = '下载中…';
   try {
-    const bytes = await S.readBytes(st.cfg, 'blobs/' + e.id + '.bin');
+    const bytes = await S.readBytes(st.cfg, 'blobs/' + e.id + '.bin', null, (got, total) => {
+      btn.textContent = total
+        ? '下载中 ' + Math.floor(got * 100 / total) + '%'
+        : '下载中 ' + fmtSize(got);
+    });
     if (!bytes) throw new Error('密文不在了——可能已被清理');
     btn.textContent = '解密中…';
     const r = await C.open(e, bytes, st.keys.dhPriv, st.id.kid);
@@ -552,13 +557,40 @@ async function saveOpened(e, btn) {
        没下载的人，密文会在同一次提交里被删掉——文件就真没了。 */
     delete st.opened[e.id];
     toast('已保存：' + got.meta.n);
-    await ack(e.id);
-    renderInbox();
   } catch (err) {
     if (err && err.name === 'AbortError') { btn.disabled = false; return; }  /* 用户自己取消 */
     toast('保存失败：' + (err && err.message ? err.message : err), 4000);
     btn.disabled = false;
+    return;
   }
+
+  /* 回执是另一件事，失败不该说成「保存失败」——文件已经在手上了。
+     慢链路上这一步很容易超时，所以记进队列，下次刷新自动补上；补不上也只是
+     发件人那边显示「未下载」，密文多留一会儿，没有东西会丢。 */
+  try {
+    await ack(e.id);
+  } catch (err) {
+    await queueAck(e.id);
+    toast('文件已存好。回执没发出去——下次刷新会自动补。', 5000);
+  }
+  renderInbox();
+}
+
+async function queueAck(id) {
+  const q = (await S.kvGet('ackQueue')) || [];
+  if (q.indexOf(id) < 0) q.push(id);
+  await S.kvSet('ackQueue', q);
+}
+
+/* 每次刷新收件箱时把欠着的回执补掉 */
+async function flushAcks() {
+  const q = (await S.kvGet('ackQueue')) || [];
+  if (!q.length) return;
+  const left = [];
+  for (const id of q) {
+    try { await ack(id); } catch (e) { left.push(id); }
+  }
+  await S.kvSet('ackQueue', left);
 }
 
 /* 回执写进索引；如果这是最后一个没下载的人，同一次提交里就把密文删掉。 */

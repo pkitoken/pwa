@@ -114,7 +114,28 @@ async function api(cfg, path, opts) {
     throw new Error('连不上 GitHub——检查网络；如果刚才在存文件，可能是页面跳转把请求打断了');
   }
   if (!res.ok) throw await fail(res);
-  return o.raw ? new Uint8Array(await res.arrayBuffer()) : res.json();
+  if (!o.raw) return res.json();
+
+  /* 慢链路上一个二十兆的密文能拉好几分钟。能流式读就流式读，一边读一边报
+     进度——否则界面上只有一句「下载中…」，人根本分不清是在动还是卡死了。 */
+  if (o.onProgress && res.body && res.body.getReader) {
+    const total = Number(res.headers.get('Content-Length') || 0);
+    const reader = res.body.getReader();
+    const chunks = [];
+    let got = 0;
+    for (;;) {
+      const r = await reader.read();
+      if (r.done) break;
+      chunks.push(r.value);
+      got += r.value.length;
+      o.onProgress(got, total);
+    }
+    const out = new Uint8Array(got);
+    let off = 0;
+    for (const c of chunks) { out.set(c, off); off += c.length; }
+    return out;
+  }
+  return new Uint8Array(await res.arrayBuffer());
 }
 
 /* ------------------------------------------------------------------ 读取 */
@@ -147,11 +168,11 @@ export async function list(cfg, path, ref) {
 }
 
 /* Contents API 加 raw 媒体类型，最大能直接取回 100 MB，不必先查 blob sha。 */
-export async function readBytes(cfg, path, ref) {
+export async function readBytes(cfg, path, ref, onProgress) {
   const url = '/contents/' + path.split('/').map(encodeURIComponent).join('/') +
               '?ref=' + encodeURIComponent(ref || cfg.branch);
   try {
-    return await api(cfg, url, { accept: 'application/vnd.github.raw', raw: true });
+    return await api(cfg, url, { accept: 'application/vnd.github.raw', raw: true, onProgress: onProgress });
   } catch (e) {
     if (e.status === 404) return null;
     throw e;
