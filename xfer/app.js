@@ -31,6 +31,7 @@ const st = {
   keys: null,      /* {dhPriv,sigPriv,sigPub} 运行时导入的 CryptoKey */
   index: null,     /* 最近一次读到的索引 */
   peek: {},        /* entry.id -> 解开的摘要 {n,s,f} */
+  opened: {},      /* entry.id -> 已解密但还没存盘的 {meta,data,who} */
   dev: null,       /* 本机设备号 */
   picked: []       /* 已选文件 */
 };
@@ -377,12 +378,23 @@ function renderInbox() {
 
     const acts = document.createElement('div');
     acts.className = 'acts';
+    const open = st.opened[e.id];
     const b = document.createElement('button');
     b.className = 'btn primary';
-    b.textContent = got ? '再下载一次' : '下载并解密';
-    b.onclick = () => grab(e, b);
+    if (open) {
+      b.textContent = '保存到文件';
+      b.onclick = () => saveOpened(e, b);
+    } else {
+      b.textContent = got ? '再下载一次' : '下载并解密';
+      b.onclick = () => grab(e, b);
+    }
     acts.appendChild(b);
-    if (got) {
+    if (open) {
+      const t = document.createElement('span');
+      t.className = 'tag ok';
+      t.textContent = '已解密，等你保存';
+      acts.appendChild(t);
+    } else if (got) {
       const t = document.createElement('span');
       t.className = 'tag ok';
       t.textContent = '已下载';
@@ -411,10 +423,14 @@ async function grab(e, btn) {
     else if (!st.roster) who += '（花名册没载入，身份未核对）';
     else if (!p || p.sig !== r.meta.from.sig) who += '（花名册里对不上这把钥匙）';
 
-    saveFile(r.data, r.meta.n, r.meta.t);
+    /* 解完先放在内存里，不当场存盘。原因有两个：
+       一是 iOS 上存盘要走系统分享面板，而分享面板必须由一次「新鲜的」点击
+       触发——网络请求一等，这次点击的授权就过期了，面板弹不出来或者什么都
+       不做；二是存盘那一下可能让页面跳转，把还在飞的回执请求打断，于是
+       屏幕上冒出一句莫名其妙的「载入失败」。
+       所以分两步：这一步只解密，下一步由用户再点一次来保存。 */
+    st.opened[e.id] = { meta: r.meta, data: r.data, who: who };
     toast('已解密：' + r.meta.n + ' — 来自 ' + who, 4200);
-
-    await ack(e.id);
     renderInbox();
   } catch (err) {
     toast(err.message, 4000);
@@ -424,7 +440,21 @@ async function grab(e, btn) {
   }
 }
 
-function saveFile(bytes, name, type) {
+/* 必须是点击处理器里第一时间调用，中间不能有 await，否则 iOS 认为
+   用户授权已经过期，navigator.share 会被拒。 */
+function shareFile(bytes, name, type) {
+  if (!navigator.canShare || !navigator.share || typeof File !== 'function') return null;
+  let file;
+  try {
+    file = new File([bytes], name || 'file.bin', { type: type || 'application/octet-stream' });
+  } catch { return null; }
+  if (!navigator.canShare({ files: [file] })) return null;
+  return navigator.share({ files: [file] });
+}
+
+/* a.download 在 iOS（尤其是主屏应用）基本不管用：要么整页跳走，要么弹一个
+   点了没反应的下载框。所以先试系统分享面板，那才是 iOS 上「存到文件」的正路。 */
+function downloadFile(bytes, name, type) {
   const url = URL.createObjectURL(new Blob([bytes], { type: type || 'application/octet-stream' }));
   const a = document.createElement('a');
   a.href = url;
@@ -432,8 +462,33 @@ function saveFile(bytes, name, type) {
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 60000);
+}
+
+async function saveOpened(e, btn) {
+  const got = st.opened[e.id];
+  if (!got) return;
+  /* 只在 iOS 上改走分享面板。Android 和桌面的 a.download 本来就好用，
+     不去动它——换成分享面板反而多一层选择。 */
+  const shared = isIOS() ? shareFile(got.data, got.meta.n, got.meta.t) : null;
+  btn.disabled = true;
+  try {
+    if (shared) {
+      await shared;
+    } else {
+      downloadFile(got.data, got.meta.n, got.meta.t);
+    }
+    /* 存盘成功才写回执。顺序反过来的话，万一存盘失败而自己又是最后一个
+       没下载的人，密文会在同一次提交里被删掉——文件就真没了。 */
+    delete st.opened[e.id];
+    toast('已保存：' + got.meta.n);
+    await ack(e.id);
+    renderInbox();
+  } catch (err) {
+    if (err && err.name === 'AbortError') { btn.disabled = false; return; }  /* 用户自己取消 */
+    toast('保存失败：' + (err && err.message ? err.message : err), 4000);
+    btn.disabled = false;
+  }
 }
 
 /* 回执写进索引；如果这是最后一个没下载的人，同一次提交里就把密文删掉。 */

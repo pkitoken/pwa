@@ -100,12 +100,19 @@ async function fail(res) {
 
 async function api(cfg, path, opts) {
   const o = opts || {};
-  const res = await fetch(base(cfg) + path, {
-    method: o.method || 'GET',
-    headers: Object.assign(headers(cfg, o.accept), o.body ? { 'Content-Type': 'application/json' } : {}),
-    body: o.body ? JSON.stringify(o.body) : undefined,
-    cache: 'no-store'
-  });
+  let res;
+  try {
+    res = await fetch(base(cfg) + path, {
+      method: o.method || 'GET',
+      headers: Object.assign(headers(cfg, o.accept), o.body ? { 'Content-Type': 'application/json' } : {}),
+      body: o.body ? JSON.stringify(o.body) : undefined,
+      cache: 'no-store'
+    });
+  } catch (e) {
+    /* Safari 把所有网络失败都说成 “Load failed”，中文界面里显示「载入失败」，
+       看着像是应用坏了。换成一句说得清的。 */
+    throw new Error('连不上 GitHub——检查网络；如果刚才在存文件，可能是页面跳转把请求打断了');
+  }
   if (!res.ok) throw await fail(res);
   return o.raw ? new Uint8Array(await res.arrayBuffer()) : res.json();
 }
