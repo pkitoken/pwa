@@ -883,6 +883,20 @@ function wire() {
 
   $('btnInviteCopy').onclick = () => copyText($('inviteText').value);
 
+  /* iOS 上从 Safari 扫码、再回到主屏应用里导入，中间必然要过一次剪贴板
+     （两边存储是分开的）。给个按钮，省得长按对准那点小菜单。 */
+  $('btnInvitePaste').onclick = async () => {
+    try {
+      const t = await navigator.clipboard.readText();
+      if (!t) throw new Error('剪贴板是空的');
+      $('inviteText').value = t.trim();
+      $('passWrap').hidden = !I.isSealedText($('inviteText').value);
+      say($('inviteState'), '粘好了' + (I.isSealedText(t) ? '，这是加密件，把口令填上' : ''), 'ok');
+    } catch (e) {
+      say($('inviteState'), '读不到剪贴板（浏览器可能不允许）——长按输入框手动粘贴吧', 'err');
+    }
+  };
+
   /* 粘进来的是口令加密件就把口令框亮出来 */
   const syncPassBox = () => { $('passWrap').hidden = !I.isSealedText($('inviteText').value); };
   $('inviteText').oninput = syncPassBox;
