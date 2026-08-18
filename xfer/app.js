@@ -882,9 +882,6 @@ function renderSettings() {
 
   $('setDev').textContent = st.dev || '—';
   renderDevices();
-  $('rosterInfo').textContent = st.roster
-    ? '共 ' + st.roster.people.length + ' 人，更新于 ' + fmtTime(st.roster.ts || 0)
-    : '未载入。';
   $('who').textContent = st.id ? st.id.name : '未导入身份';
 }
 
@@ -971,10 +968,6 @@ function wire() {
   };
   $('btnSend').onclick = send;
 
-  $('btnRoster').onclick = async () => {
-    try { await loadRoster(); renderSettings(); renderRecips(); toast('花名册已更新'); }
-    catch (e) { toast(e.message, 4000); }
-  };
 
   $('btnImport').onclick = () => {
     /* 手动打开时清空，免得上一次失败留下的内容被当成新扫到的 */
