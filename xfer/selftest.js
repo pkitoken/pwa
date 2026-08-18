@@ -174,6 +174,20 @@ async function person(name) {
     return '签名把收件人列表也锁住了';
   });
 
+  await t('领取记录：devices 被写成对象也要能自愈', () => {
+    /* 1.6 版管理台把默认值写成了 devices:{}，应用一调 .some() 就炸。
+       这里钉住那条修复：类型不对就换成空数组，而不是 `x || []`（挡不住 {}）。 */
+    const norm = (c) => { if (!Array.isArray(c.devices)) c.devices = []; return c; };
+    assert(Array.isArray(norm({ devices: {} }).devices), '{} 没被修回数组');
+    assert(Array.isArray(norm({ devices: null }).devices), 'null 没被修回数组');
+    assert(Array.isArray(norm({}).devices), '缺字段时没补成数组');
+    assert(norm({ devices: [1, 2] }).devices.length === 2, '正常的数组被误改了');
+    /* 顺手证明当初那个写法确实挡不住 */
+    const broken = {};
+    assert(({ devices: {} }.devices || broken) !== broken, '`|| []` 对 {} 无效——正是这次的病根');
+    return '四种输入都归一成数组';
+  });
+
   await t('传给自己：同一把钥匙自封自解', async () => {
     /* 手机发、电脑收，两台设备是同一个身份、同一个 kid，所以就是自己封给自己 */
     const me2 = await person('自己');

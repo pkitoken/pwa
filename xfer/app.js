@@ -160,7 +160,8 @@ async function claimInvite(cfg, inv, dev) {
         : '这张邀请码已经被领取过了。让管理员重发一张，或者在已登记的设备上用「添加我的另一台设备」。');
     }
     c.nonces = c.nonces || {};
-    c.devices = c.devices || [];
+    /* 类型检查，不是 `|| []`——后者挡不住 `{}`。顺便把之前被写坏的文件修回来。 */
+    if (!Array.isArray(c.devices)) c.devices = [];
     const known = c.devices.some((d) => d.id === dev);
     const max = c.max || DEFAULT_MAX_DEVICES;
     if (!known && c.devices.length >= max) {
@@ -269,7 +270,7 @@ async function renderDevices() {
   if (!st.id || !st.cfg || !st.cfg.token) return;
   let c = null;
   try { c = await S.readJson(st.cfg, 'claims/' + st.id.uid + '.json'); } catch (e) { return; }
-  if (!c || !c.devices) return;
+  if (!c || !Array.isArray(c.devices)) return;
   const mine = await deviceId();
   for (const d of c.devices) {
     const li = document.createElement('li');
