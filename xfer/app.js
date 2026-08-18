@@ -938,6 +938,9 @@ function wire() {
 
   $('btnRefresh').onclick = refreshInbox;
 
+  /* 页面已经开着时再扫一张码，浏览器只改 # 不重新加载，得靠这个事件接住 */
+  window.addEventListener('hashchange', () => handleScanned(takeHashInvite()));
+
   $('pick').onclick = () => $('file').click();
   $('pick').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') $('file').click(); };
   $('file').onchange = () => {
@@ -1077,36 +1080,47 @@ async function boot() {
   }
 
   renderSettings();
-  $('ver').textContent = await swVersion();
+  const v = await swVersion();
+  $('ver').textContent = v;
+  $('verTop').textContent = 'v' + v;
 
-  if (scanned) {
-    $('inviteText').value = scanned;
-    const needPass = I.isSealedText(scanned);
-    $('passWrap').hidden = !needPass;
-    $('setup').hidden = false;
-    /* iOS 的主屏应用有独立的存储空间，在 Safari 里导入，主屏图标里是看不到的。
-       所以这种情况下不自动领取——一旦领了，那张一次性码就白白烧掉了。 */
-    if (needPass) {
-      /* 口令件本来就要人工输入口令，不能自动导入 */
-      say($('iosWarn'), '扫到的是口令加密件。把对方念的那句口令填在下面，再点「导入」。',
-        isIOS() && !isStandalone() ? 'err' : '');
-      if (isIOS() && !isStandalone()) {
-        say($('iosWarn'),
-          '而且你现在是在 Safari 里。iOS 主屏应用的存储是独立的，先「分享 → 添加到主屏幕」，' +
-          '打开那个图标再来填口令，否则白白烧掉一张一次性码。', 'err');
-      }
-    } else if (isIOS() && !isStandalone()) {
-      say($('iosWarn'),
-        '你在 Safari 里。iOS 的主屏应用有独立的存储空间，在这里导入，主屏图标里是空的。' +
-        '照这个顺序来：① 点下面的「复制」 ② 分享 → 添加到主屏幕 ③ 打开主屏那个图标 ' +
-        '④ 在里面点「从剪贴板粘贴」 ⑤ 填口令，导入。', 'err');
-    } else {
-      $('btnInviteOk').click();
-    }
-  } else if (!st.id) {
+  if (scanned) handleScanned(scanned);
+  else if (!st.id) {
     $('setup').hidden = false;
   } else if (st.cfg && st.cfg.token) {
     refreshInbox();
+  }
+}
+
+/* 扫码带进来的邀请：boot 时要处理，**hashchange 时同样要处理**。
+
+   为什么：如果这个页面已经在 Safari 里开着（比如你早就装好了），再扫一张
+   指向同一地址、只是 # 后面不同的码，浏览器认为还是同一个文档——它不会重新
+   加载，只会触发 hashchange。boot() 根本不会再跑一遍，于是屏幕上什么也没发生，
+   你看到的还是那个已登记的界面。第二次有时又好了，因为标签页碰巧被回收重开了。
+   这就是「时灵时不灵」的由来。 */
+function handleScanned(scanned) {
+  if (!scanned) return;
+  $('inviteText').value = scanned;
+  const needPass = I.isSealedText(scanned);
+  $('passWrap').hidden = !needPass;
+  $('invitePass').value = '';
+  $('iosWarn').hidden = true;
+  $('inviteState').hidden = true;
+  $('setup').hidden = false;
+
+  /* iOS 的主屏应用有独立的存储空间，在 Safari 里导入，主屏图标里是看不到的。
+     所以这种情况不自动领取——一旦领了，那张一次性码就白白烧掉了。 */
+  const inSafari = isIOS() && !isStandalone();
+  if (inSafari) {
+    say($('iosWarn'),
+      '你在 Safari 里。iOS 主屏应用的存储是独立的，在这儿导入，主屏图标里是空的。' +
+      '照这个顺序来：① 点下面的「复制」 ② 分享 → 添加到主屏幕 ③ 打开主屏那个图标 ' +
+      '④ 点「从剪贴板粘贴」' + (needPass ? ' ⑤ 填口令，导入。' : ' ⑤ 导入。'), 'err');
+  } else if (needPass) {
+    say($('iosWarn'), '扫到的是口令加密件。把对方念的那句口令填在下面，再点「导入」。');
+  } else {
+    $('btnInviteOk').click();
   }
 }
 
