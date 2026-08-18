@@ -801,9 +801,21 @@ function wire() {
     const btn = $('btnInviteOk');
     btn.disabled = true;
     try {
+      const raw = $('inviteText').value;
+      let inv;
+      if (I.isSealedText(raw)) {
+        const c = I.checkPass($('invitePass').value);
+        if (!c.ok) throw new Error('口令' + (c.han ? '不够长：' + c.why : '还没填'));
+        say(el, '正在按口令解开…（要算几秒，慢是故意的）');
+        inv = await I.openSealed(I.sealedFromText(raw), $('invitePass').value);
+      } else {
+        inv = I.inviteFromText(raw);
+      }
       say(el, '正在向仓库登记这台设备…');
-      await applyInvite(I.inviteFromText($('inviteText').value));
+      await applyInvite(inv);
       $('inviteText').value = '';
+      $('invitePass').value = '';
+      $('passWrap').hidden = true;
       try { await loadRoster(true); } catch (e) { /* 花名册还没建好也不挡导入 */ }
       renderSettings();
       renderRecips();
@@ -815,6 +827,11 @@ function wire() {
   };
 
   $('btnInviteCopy').onclick = () => copyText($('inviteText').value);
+
+  /* 粘进来的是口令加密件就把口令框亮出来 */
+  const syncPassBox = () => { $('passWrap').hidden = !I.isSealedText($('inviteText').value); };
+  $('inviteText').oninput = syncPassBox;
+  $('inviteText').onchange = syncPassBox;
 
   $('btnPair').onclick = showPairSheet;
   $('btnPairClose').onclick = () => { $('pair').hidden = true; };
@@ -867,6 +884,7 @@ async function boot() {
 
   if (scanned) {
     $('inviteText').value = scanned;
+    $('passWrap').hidden = true;
     $('setup').hidden = false;
     /* iOS 的主屏应用有独立的存储空间，在 Safari 里导入，主屏图标里是看不到的。
        所以这种情况下不自动领取——一旦领了，那张一次性码就白白烧掉了。 */

@@ -145,7 +145,9 @@
     <p class="hint">把管理员给你的那串邀请码整段粘进来。里面含你的私钥和仓库令牌，
       只会存在这台设备上。</p>
     <p id="iosWarn" class="state err" hidden></p>
-    <textarea id="inviteText" class="ta mono" rows="6" placeholder="TXF2.… 或整条链接" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+    <textarea id="inviteText" class="ta mono" rows="6" placeholder="TXF2.… / TXF3.… / 整条链接" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+    <label class="fld" id="passWrap" hidden><span>口令（对方电话里念给你的那句）</span>
+      <input id="invitePass" class="inp" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
     <div class="btns">
       <button id="btnInviteFile" class="btn">从文件选取</button>
       <input type="file" id="inviteFile" accept=".txt,.json,application/json,text/plain" hidden>

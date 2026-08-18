@@ -243,6 +243,54 @@ async function person(name) {
     return '2 KB 往返一致';
   });
 
+  await t('口令加密件：往返、空格与规范化', async () => {
+    const dh = await C.genDh(), sg = await C.genSig();
+    const bytes = I.packInvite({
+      kind: 0, nonce: C.randHex(8), exp: 1893456000,
+      dh: await C.exportJwk(dh.privateKey), sig: await C.exportJwk(sg.privateKey),
+      uid: 'zhangsan', name: '张三',
+      repo: { owner: 'pkitoken', repo: 'xfer-private', branch: 'main', token: 'github_pat_x' }
+    });
+    /* 自检里把迭代次数压到最低，不然每跑一次要等好几秒 */
+    const sealed = await I.sealInvite(bytes, '今天下午三点老地方', 10000);
+    const text = I.sealedToText(sealed);
+    assert(I.isSealedText(text), '认不出这是加密件');
+    assert(!I.isSealedText(I.inviteToText(bytes)), '把明文码误判成加密件了');
+
+    /* 念口令时的停顿、全角空格，都不该影响结果 */
+    const back = await I.openSealed(I.sealedFromText(text), '今天下午 三点　老地方');
+    assert(back.uid === 'zhangsan' && back.name === '张三', '解出来的身份不对');
+    assert(back.repo.repo === 'xfer-private', '仓库信息丢了');
+    assert(C.pubFromJwk(back.dh) === await C.exportPub(dh.publicKey), '私钥没还原');
+    return text.length + ' 字符密文';
+  });
+
+  await t('口令加密件：口令错了必须打不开', async () => {
+    const dh = await C.genDh(), sg = await C.genSig();
+    const bytes = I.packInvite({
+      kind: 0, nonce: C.randHex(8), exp: 1893456000,
+      dh: await C.exportJwk(dh.privateKey), sig: await C.exportJwk(sg.privateKey),
+      uid: 'a', name: '甲', repo: { owner: 'o', repo: 'r', branch: 'main', token: 't' }
+    });
+    const sealed = await I.sealInvite(bytes, '今天下午三点老地方', 10000);
+    try {
+      await I.openSealed(sealed, '今天下午四点老地方');
+      throw new Error('口令错了居然也解开了');
+    } catch (e) {
+      assert(e.message.indexOf('口令不对') >= 0, '拒绝的理由不对：' + e.message);
+      return 'GCM 认证挡住了';
+    }
+  });
+
+  await t('口令规则：不足 5 个汉字要拒绝', () => {
+    assert(I.checkPass('老地方见').ok === false, '4 个汉字居然放过了');
+    assert(I.checkPass('abcdefghij').ok === false, '纯英文居然放过了');
+    assert(I.checkPass('今天 下午 三点 老地方').ok === true, '正常口令被拒了');
+    assert(I.normalizePass(' 今天　下午 ') === '今天下午', '空格没清干净');
+    assert(I.checkPass('今天下午三点').han === 6, '汉字数不对');
+    return '边界都符合预期';
+  });
+
   await t('二维码：40 个版本的功能模块数都自洽', () => {
     /* 总模块数 − 功能模块数 必须等于该版本的数据位数。标准里的容量表就是
        这么推出来的，所以这条恒等式能独立抓住「某圈预留漏了」这类错——
