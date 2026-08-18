@@ -265,6 +265,27 @@ async function person(name) {
     return text.length + ' 字符密文';
   });
 
+  await t('口令加密件：做成链接也要能扫能解', async () => {
+    const dh = await C.genDh(), sg = await C.genSig();
+    const bytes = I.packInvite({
+      kind: 0, nonce: C.randHex(8), exp: 1893456000,
+      dh: await C.exportJwk(dh.privateKey), sig: await C.exportJwk(sg.privateKey),
+      uid: 'lisi', name: '李四',
+      repo: { owner: 'pkitoken', repo: 'xfer-private', branch: 'main',
+              token: 'github_pat_' + new Array(83).join('x') }
+    });
+    const sealed = await I.sealInvite(bytes, '今天下午三点老地方', 10000);
+    const url = I.sealedToUrl('https://pkitoken.github.io/pwa/xfer/', sealed);
+    /* 应用是从 #s= 里取的，模拟一遍那条路径 */
+    const m = url.match(/[#&]s=([A-Za-z0-9_\-]+)/);
+    assert(m, '链接里没有 #s=');
+    const back = await I.openSealed(I.sealedFromText('TXF3.' + m[1]), '今天下午三点老地方');
+    assert(back.uid === 'lisi' && back.name === '李四', '身份没还原');
+    const q = QR.qrSvg(C.utf8(url), { ecl: 1 });
+    assert(q.px >= 240 && q.px <= 560, '二维码 ' + q.px + 'px，不好扫');
+    return url.length + ' 字符 → 二维码版本 ' + q.ver + '，' + q.px + 'px';
+  });
+
   await t('口令加密件：口令错了必须打不开', async () => {
     const dh = await C.genDh(), sg = await C.genSig();
     const bytes = I.packInvite({

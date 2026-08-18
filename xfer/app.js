@@ -853,11 +853,13 @@ function wire() {
 /* 扫码进来的链接形如 …/xfer/#i=<邀请码>。# 后面的内容不会发给服务器，
    但会留在浏览器历史里，所以读完立刻抹掉。 */
 function takeHashInvite() {
-  const m = (location.hash || '').match(/[#&]i=([A-Za-z0-9_\-]+)/);
-  if (!m) return null;
+  const h = location.hash || '';
+  const plain = h.match(/[#&]i=([A-Za-z0-9_\-]+)/);
+  const sealed = h.match(/[#&]s=([A-Za-z0-9_\-]+)/);
+  if (!plain && !sealed) return null;
   try { history.replaceState(null, '', location.pathname + location.search); }
   catch { location.hash = ''; }
-  return 'TXF2.' + m[1];
+  return sealed ? 'TXF3.' + sealed[1] : 'TXF2.' + plain[1];
 }
 
 async function boot() {
@@ -884,11 +886,21 @@ async function boot() {
 
   if (scanned) {
     $('inviteText').value = scanned;
-    $('passWrap').hidden = true;
+    const needPass = I.isSealedText(scanned);
+    $('passWrap').hidden = !needPass;
     $('setup').hidden = false;
     /* iOS 的主屏应用有独立的存储空间，在 Safari 里导入，主屏图标里是看不到的。
        所以这种情况下不自动领取——一旦领了，那张一次性码就白白烧掉了。 */
-    if (isIOS() && !isStandalone()) {
+    if (needPass) {
+      /* 口令件本来就要人工输入口令，不能自动导入 */
+      say($('iosWarn'), '扫到的是口令加密件。把对方电话里念的那句话填在下面，再点「导入」。',
+        isIOS() && !isStandalone() ? 'err' : '');
+      if (isIOS() && !isStandalone()) {
+        say($('iosWarn'),
+          '而且你现在是在 Safari 里。iOS 主屏应用的存储是独立的，先「分享 → 添加到主屏幕」，' +
+          '打开那个图标再来填口令，否则白白烧掉一张一次性码。', 'err');
+      }
+    } else if (isIOS() && !isStandalone()) {
       say($('iosWarn'),
         '你现在是在 Safari 里打开的。iOS 的主屏应用有自己独立的存储，' +
         '在这里导入，主屏上的图标里并不会有你的身份。请先「分享 → 添加到主屏幕」，' +

@@ -189,6 +189,10 @@ export async function openSealed(bytes, pass) {
 
 export const sealedToText = (bytes) => SEALED_MAGIC + '.' + b64u(bytes);
 
+/* 加密件也做成链接，好处是可以直接印成二维码：拍张照发出去，口令电话里念。
+   用 #s= 区别于明文的 #i=，应用一看前缀就知道要不要问口令。 */
+export const sealedToUrl = (base, bytes) => base + '#s=' + b64u(bytes);
+
 export function isSealedText(text) {
   const s = (text || '').trim().replace(/\s+/g, '');
   return s.indexOf(SEALED_MAGIC + '.') === 0;
