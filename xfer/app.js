@@ -939,8 +939,16 @@ function wire() {
 
   $('btnRefresh').onclick = refreshInbox;
 
-  /* 页面已经开着时再扫一张码，浏览器只改 # 不重新加载，得靠这个事件接住 */
+  /* 扫码带进来的地址，可能通过三条不同的路径到达，Safari 走哪条并不确定：
+       · 全新加载        → boot() 里处理
+       · 同文档改 #      → hashchange
+       · 标签页被恢复    → pageshow / 重新可见，前两个都可能不触发
+     三个入口都接上。takeHashInvite() 读完立刻把 # 抹掉，所以重复触发无害。 */
   window.addEventListener('hashchange', () => handleScanned(takeHashInvite()));
+  window.addEventListener('pageshow', () => handleScanned(takeHashInvite()));
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) handleScanned(takeHashInvite());
+  });
 
   $('pick').onclick = () => $('file').click();
   $('pick').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') $('file').click(); };
@@ -965,7 +973,16 @@ function wire() {
     catch (e) { toast(e.message, 4000); }
   };
 
-  $('btnImport').onclick = () => { $('setup').hidden = false; };
+  $('btnImport').onclick = () => {
+    /* 手动打开时清空，免得上一次失败留下的内容被当成新扫到的 */
+    $('inviteText').value = '';
+    $('invitePass').value = '';
+    $('passWrap').hidden = true;
+    $('scanInfo').hidden = true;
+    $('iosWarn').hidden = true;
+    $('inviteState').hidden = true;
+    $('setup').hidden = false;
+  };
   $('btnInviteCancel').onclick = () => { $('setup').hidden = true; };
   $('btnInviteFile').onclick = () => $('inviteFile').click();
   $('inviteFile').onchange = async () => {
@@ -996,6 +1013,8 @@ function wire() {
       $('inviteText').value = '';
       $('invitePass').value = '';
       $('passWrap').hidden = true;
+      $('scanInfo').hidden = true;
+      lastScanFp = null;
       try { await loadRoster(true); } catch (e) { /* 花名册还没建好也不挡导入 */ }
       renderSettings();
       renderRecips();
@@ -1100,9 +1119,32 @@ async function boot() {
    加载，只会触发 hashchange。boot() 根本不会再跑一遍，于是屏幕上什么也没发生，
    你看到的还是那个已登记的界面。第二次有时又好了，因为标签页碰巧被回收重开了。
    这就是「时灵时不灵」的由来。 */
-function handleScanned(scanned) {
+/* 两张邀请码摆在一起长得一模一样（都是一大段 base64），光看内容根本分不清
+   刚扫的是新的还是上一张。所以给每张算个短指纹显示出来，再标上到达时间。 */
+async function fingerprint(text) {
+  const h = await crypto.subtle.digest('SHA-256', C.utf8(text));
+  return C.hex(new Uint8Array(h).subarray(0, 3));
+}
+
+let lastScanFp = null;
+
+async function handleScanned(scanned) {
   if (!scanned) return;
+  const fp = await fingerprint(scanned);
+  const now = new Date();
+  const p2 = (x) => String(x).padStart(2, '0');
+  const clock = p2(now.getHours()) + ':' + p2(now.getMinutes()) + ':' + p2(now.getSeconds());
+
   $('inviteText').value = scanned;
+  /* 别让内容处于选中状态——看着像是「上一张还留在这儿」 */
+  try { $('inviteText').setSelectionRange(0, 0); $('inviteText').blur(); } catch (e) {}
+
+  say($('scanInfo'), fp === lastScanFp
+    ? '⟳ 这张码刚才已经扫过了（指纹 ' + fp + '，' + clock + '）——不是新的。'
+    : '✓ 刚扫到一张新码：指纹 ' + fp + ' · ' + clock,
+    fp === lastScanFp ? '' : 'ok');
+  lastScanFp = fp;
+
   const needPass = I.isSealedText(scanned);
   $('passWrap').hidden = !needPass;
   $('invitePass').value = '';
