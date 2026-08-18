@@ -878,8 +878,8 @@ function renderSettings() {
   $('setGroups').textContent = self ? (self.groups || []).join('、') || '（无）' : '—';
 
   if (st.cfg) {
-    $('setRepo').value = st.cfg.owner ? st.cfg.owner + '/' + st.cfg.repo : '';
-    $('setBranch').value = st.cfg.branch || 'main';
+    $('setRepo').textContent = st.cfg.owner ? st.cfg.owner + '/' + st.cfg.repo : '—';
+    $('setBranch').textContent = st.cfg.branch || 'main';
     $('setToken').value = st.cfg.token || '';
   }
   $('setDev').textContent = st.dev || '—';
@@ -890,20 +890,16 @@ function renderSettings() {
   $('who').textContent = st.id ? st.id.name : '未导入身份';
 }
 
+/* 只保存令牌。仓库和分支跟着邀请码来，界面上只读——之前它们是可编辑的输入框，
+   那是早年还要手工填仓库时留下的；现在改动它们只会让应用连不上，而且没有
+   任何提示告诉你是自己改坏的。 */
 async function saveRepo() {
-  const v = $('setRepo').value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '');
-  const parts = v.split('/');
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    say($('repoState'), '仓库要写成 用户名/仓库名 的形式。', 'err');
-    return false;
-  }
-  st.cfg = {
-    owner: parts[0], repo: parts[1],
-    branch: $('setBranch').value.trim() || 'main',
-    token: $('setToken').value.trim()
-  };
+  if (!st.cfg) { say($('repoState'), '还没有身份，先导入邀请码。', 'err'); return false; }
+  const tok = $('setToken').value.trim();
+  if (!tok) { say($('repoState'), '令牌是空的。', 'err'); return false; }
+  st.cfg.token = tok;
   await S.kvSet('repo', st.cfg);
-  say($('repoState'), '已保存。', 'ok');
+  say($('repoState'), '令牌已保存。', 'ok');
   return true;
 }
 
