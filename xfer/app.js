@@ -212,7 +212,7 @@ async function applyInvite(inv) {
 
 /* 已登记的设备现场生成一张新码：同一个身份、新的 nonce、十分钟有效。
    管理员那张一次性码用掉之后，加设备就靠这个，不用再找管理员。 */
-async function makePairCode() {
+async function makePairCode(pass) {
   if (!st.id || !st.cfg) throw new Error('本机还没有身份');
   const bytes = I.packInvite({
     kind: I.KIND_PAIR,
@@ -222,22 +222,42 @@ async function makePairCode() {
     uid: st.id.uid, name: st.id.name,
     repo: st.cfg
   });
-  const url = I.inviteToUrl(location.origin + location.pathname, bytes);
-  return { text: I.inviteToText(bytes), url: url, qr: qrSvg(C.utf8(url), { ecl: 1 }) };
+  /* 配对码和邀请码一样，一律加密后再显示——屏幕会被人看见，截图会被转手。 */
+  const sealed = await I.sealInvite(bytes, pass);
+  const url = I.sealedToUrl(location.origin + location.pathname, sealed);
+  return { text: I.sealedToText(sealed), url: url, qr: qrSvg(C.utf8(url), { ecl: 1 }) };
 }
 
-async function showPairSheet() {
+function showPairSheet() {
   if (needIdentity() || needRepo()) return;
+  $('pairTtl').textContent = PAIR_TTL_MIN + ' 分钟';
+  $('pairPass').value = '';
+  $('pairText').value = '';
+  $('pairQr').hidden = true;
+  $('pairMeta').hidden = true;
+  $('btnPairMore').hidden = true;
+  $('pairMoreWrap').hidden = true;
+  $('pairState').hidden = true;
+  $('pair').hidden = false;
+}
+
+async function makePairSheet() {
+  const el = $('pairState');
   try {
-    const p = await makePairCode();
-    $('pairTtl').textContent = PAIR_TTL_MIN + ' 分钟';
-    $('pairQr').innerHTML = p.qr.svg +
-      '<div class="qrmeta">版本 ' + p.qr.ver + ' · ' + p.qr.size + '×' + p.qr.size + ' 模块 · ' +
-      p.qr.px + 'px · 离屏幕 20–30 厘米扫</div>';
+    const c = I.checkPass($('pairPass').value);
+    if (!c.ok) { say(el, c.why, 'err'); return; }
+    say(el, '正在加密…（要算几秒）');
+    const p = await makePairCode($('pairPass').value);
+    $('pairQr').innerHTML = p.qr.svg;
+    $('pairQr').hidden = false;
+    $('pairMeta').textContent = '版本 ' + p.qr.ver + ' · ' + p.qr.px + 'px · ' +
+      PAIR_TTL_MIN + ' 分钟内有效 · 只能用一次';
+    $('pairMeta').hidden = false;
     $('pairText').value = p.text;
-    $('pair').hidden = false;
+    $('btnPairMore').hidden = false;
+    say(el, '好了。到另一台设备上扫它，然后输入同一句口令。', 'ok');
   } catch (e) {
-    toast('生成配对码失败：' + e.message, 4000);
+    say(el, '生成失败：' + e.message, 'err');
   }
 }
 
@@ -903,8 +923,13 @@ function wire() {
   $('inviteText').onchange = syncPassBox;
 
   $('btnPair').onclick = showPairSheet;
+  $('btnPairMake').onclick = makePairSheet;
   $('btnPairClose').onclick = () => { $('pair').hidden = true; };
   $('btnPairCopy').onclick = () => copyText($('pairText').value);
+  $('btnPairMore').onclick = () => {
+    $('pairMoreWrap').hidden = !$('pairMoreWrap').hidden;
+    $('btnPairMore').textContent = $('pairMoreWrap').hidden ? '其它方式（笔记本扫不了码时用）' : '收起';
+  };
 
   $('btnWipe').onclick = async () => {
     if (!confirm('清空本机的身份、令牌和发件记录？仓库里的文件不受影响。')) return;

@@ -129,12 +129,22 @@
     <p class="hint">这张码把你的身份复制到另一台设备上，<b id="pairTtl">10 分钟</b>内有效，
       且只能用一次。手机扫码；笔记本没摄像头就复制下面那段文字，在那边的
       「导入 / 更换身份」里粘贴。</p>
-    <div id="pairQr" class="qrbox"></div>
-    <textarea id="pairText" class="ta mono" rows="4" readonly></textarea>
+    <p class="hint">要设个口令——码里有你的私钥和令牌，屏幕被人瞟到、或者截图转手，
+      没口令也打不开。到那边输入同一句话即可。</p>
+    <label class="fld"><span>口令（至少 5 个汉字，空格自动忽略）</span>
+      <input id="pairPass" class="inp" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <p id="pairState" class="state" hidden></p>
+    <div class="btns"><button id="btnPairMake" class="btn primary">生成配对码</button></div>
+    <div id="pairQr" class="qrbox" hidden></div>
+    <p class="hint" id="pairMeta" hidden></p>
     <div class="btns">
-      <button id="btnPairCopy" class="btn">复制文字</button>
-      <button id="btnPairClose" class="btn">关闭</button>
+      <button id="btnPairMore" class="btn" hidden>其它方式（笔记本扫不了码时用）</button>
     </div>
+    <div id="pairMoreWrap" hidden>
+      <textarea id="pairText" class="ta mono" rows="3" readonly></textarea>
+      <div class="btns"><button id="btnPairCopy" class="btn">复制密文</button></div>
+    </div>
+    <div class="btns"><button id="btnPairClose" class="btn">关闭</button></div>
   </div>
 </div>
 
