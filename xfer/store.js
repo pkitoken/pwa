@@ -87,10 +87,10 @@ async function fail(res) {
   let detail = '';
   try { detail = (await res.json()).message || ''; } catch {}
   const map = {
-    401: '令牌无效或已过期',
-    403: '令牌权限不足，或触发了速率限制',
-    404: '仓库或路径不存在——也可能是令牌看不到这个私有仓库',
-    409: '仓库状态冲突',
+    401: '访问凭据无效或已过期',
+    403: '没有权限，或者请求太频繁了',
+    404: '找不到内容——可能已经被清理掉了',
+    409: '状态冲突',
     422: '提交被拒绝'
   };
   const err = new Error((map[res.status] || ('HTTP ' + res.status)) + (detail ? '：' + detail : ''));

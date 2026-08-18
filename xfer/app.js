@@ -387,7 +387,10 @@ async function refreshInbox() {
     hint.textContent = '最后检查 ' + fmtTime(Date.now());
   } catch (e) {
     hint.textContent = '';
-    toast(e.message);
+    /* 用户手里已经没有任何可调的开关了，所以别抛术语——直接说下一步做什么 */
+    toast((e.status === 401 || e.status === 403)
+      ? '这台设备的访问权限失效了——找管理员要一张新的邀请码'
+      : e.message, 5000);
   }
 }
 
@@ -877,26 +880,12 @@ function renderSettings() {
   const self = me();
   $('setGroups').textContent = self ? (self.groups || []).join('、') || '（无）' : '—';
 
-  if (st.cfg) $('setToken').value = st.cfg.token || '';
   $('setDev').textContent = st.dev || '—';
   renderDevices();
   $('rosterInfo').textContent = st.roster
     ? '共 ' + st.roster.people.length + ' 人，更新于 ' + fmtTime(st.roster.ts || 0)
     : '未载入。';
   $('who').textContent = st.id ? st.id.name : '未导入身份';
-}
-
-/* 只保存令牌。仓库和分支跟着邀请码来，界面上只读——之前它们是可编辑的输入框，
-   那是早年还要手工填仓库时留下的；现在改动它们只会让应用连不上，而且没有
-   任何提示告诉你是自己改坏的。 */
-async function saveRepo() {
-  if (!st.cfg) { say($('repoState'), '还没有身份，先导入邀请码。', 'err'); return false; }
-  const tok = $('setToken').value.trim();
-  if (!tok) { say($('repoState'), '令牌是空的。', 'err'); return false; }
-  st.cfg.token = tok;
-  await S.kvSet('repo', st.cfg);
-  say($('repoState'), '令牌已保存。', 'ok');
-  return true;
 }
 
 /* ------------------------------------------------------- Service Worker */
@@ -982,16 +971,6 @@ function wire() {
   };
   $('btnSend').onclick = send;
 
-  $('btnSaveRepo').onclick = saveRepo;
-  $('btnTest').onclick = async () => {
-    if (!await saveRepo()) return;
-    say($('repoState'), '正在连接…');
-    try {
-      const r = await S.probe(st.cfg);
-      say($('repoState'), '连上了。' + (r.private ? '私有仓库' : '⚠ 这是公开仓库') +
-        '，写权限' + (r.push ? '有' : '没有——只能收，不能发'), r.push ? 'ok' : 'err');
-    } catch (e) { say($('repoState'), e.message, 'err'); }
-  };
   $('btnRoster').onclick = async () => {
     try { await loadRoster(); renderSettings(); renderRecips(); toast('花名册已更新'); }
     catch (e) { toast(e.message, 4000); }
