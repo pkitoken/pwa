@@ -6,7 +6,7 @@
  * 会一直吃旧的 app.js，推什么上去都没用。
  */
 
-const VERSION = '1.1';
+const VERSION = '1.2';
 const CACHE = `xfer-${VERSION}`;
 
 const SHELL = [

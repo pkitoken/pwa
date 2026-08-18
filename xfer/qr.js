@@ -86,7 +86,7 @@ function alignPositions(ver) {
   return res.reverse();
 }
 
-function rawDataModules(ver) {
+export function rawDataModules(ver) {
   let res = (16 * ver + 128) * ver + 64;
   if (ver >= 2) {
     const n = Math.floor(ver / 7) + 2;
@@ -183,7 +183,11 @@ function makeMatrix(data, ecl, ver) {
   /* 预留格式信息。i===6 要跳过：(6,8) 和 (8,6) 属于定时图案，格式信息本来
      就绕开它们，覆盖掉就把定时图案打断了。 */
   for (let i = 0; i < 9; i++) if (i !== 6) { setf(i, 8, 0); setf(8, i, 0); }
-  setf(8, size - 8, 1);                       /* 恒黑模块 */
+  /* 格式信息有第二份拷贝：第 8 行的右端和第 8 列的下端，各 8 个模块。
+     这一圈同样要先占住——不占的话排数据时会把码字写进去，后面整串跟着错位，
+     drawFormat 再把它们盖掉，于是 16 个数据位凭空消失。 */
+  for (let i = 0; i < 8; i++) { setf(size - 1 - i, 8, 0); setf(8, size - 1 - i, 0); }
+  setf(8, size - 8, 1);                       /* 恒黑模块，必须在上一行之后 */
   if (ver >= 7)
     for (let i = 0; i < 18; i++) {
       const a = size - 11 + i % 3, b = Math.floor(i / 3);
@@ -205,7 +209,9 @@ function makeMatrix(data, ecl, ver) {
         }
       }
   }
-  return { mod, fun, size };
+  let funCount = 0;
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) funCount += fun[y][x];
+  return { mod, fun, size, funCount };
 }
 
 /* 掩码评分。N3（类似定位图案的 1:1:3:1:1）必须把符号外的空白边也算成浅色，
@@ -309,15 +315,15 @@ function drawVersion(mod, ver, size) {
 
 /*  bytes: Uint8Array；ecl: 0=L 1=M 2=Q 3=H
     返回 { size, ver, mask, mod }，mod[y][x] 为 0/1                          */
-export function encodeQr(bytes, ecl) {
+export function encodeQr(bytes, ecl, minVer) {
   const lvl = ecl === undefined ? 1 : ecl;
   let ver = 0;
-  for (let v = 1; v <= 40; v++) {
+  for (let v = minVer || 1; v <= 40; v++) {
     if (4 + ccBits(v) + 8 * bytes.length <= dataCodewords(v, lvl) * 8) { ver = v; break; }
   }
   if (!ver) throw new Error('内容太长，二维码放不下');
 
-  const { mod, fun, size } = makeMatrix(bytes, lvl, ver);
+  const { mod, fun, size, funCount } = makeMatrix(bytes, lvl, ver);
   drawVersion(mod, ver, size);
 
   let best = null, bestPen = Infinity, bestMask = 0;
@@ -330,7 +336,7 @@ export function encodeQr(bytes, ecl) {
     const p = penalty(cand, size);
     if (p < bestPen) { best = cand; bestPen = p; bestMask = m; }
   }
-  return { size, ver, mask: bestMask, mod: best };
+  return { size, ver, mask: bestMask, mod: best, funCount };
 }
 
 /* 画成 SVG。

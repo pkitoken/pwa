@@ -243,29 +243,50 @@ async function person(name) {
     return '2 KB 往返一致';
   });
 
+  await t('二维码：40 个版本的功能模块数都自洽', () => {
+    /* 总模块数 − 功能模块数 必须等于该版本的数据位数。标准里的容量表就是
+       这么推出来的，所以这条恒等式能独立抓住「某圈预留漏了」这类错——
+       1.1 版就是漏了格式信息的第二份拷贝，16 个数据位被挤掉，谁都扫不出来。 */
+    for (let v = 1; v <= 40; v++) {
+      const q = QR.encodeQr(C.utf8('x'), 1, v);
+      assert(q.ver === v, '强制版本 ' + v + ' 却得到 ' + q.ver);
+      const dataModules = q.size * q.size - q.funCount;
+      const want = QR.rawDataModules(v);
+      assert(dataModules === want,
+        '版本 ' + v + '：数据模块 ' + dataModules + '，应为 ' + want +
+        '（差 ' + (dataModules - want) + '）');
+    }
+    return '版本 1–40 全部自洽';
+  });
+
   await t('二维码：与参考实现逐模块一致（三组固定向量）', async () => {
     /* 期望值来自本机 Python 实现，那份已和 Nayuki 的参考实现（MIT）在 77 组
        用例上逐模块对齐过。这里只验 JS 移植有没有抄错。 */
     const V = [
-      { d: C.utf8('A'), ecl: 0, ver: 1, size: 21, mask: 0,
+      { tag: 'A', d: C.utf8('A'), ecl: 0, ver: 1, size: 21, mask: 0,
         sha: '4597c26c5a34a79c80006146bbb14ade03f6a4c8ae35407ee421e7e2830adefc' },
-      { d: C.utf8('https://pkitoken.github.io/pwa/xfer/#i=' + new Array(445).join('A')),
+      { tag: 'URL', d: C.utf8('https://pkitoken.github.io/pwa/xfer/#i=' + new Array(445).join('A')),
         ecl: 1, ver: 17, size: 85, mask: 0,
         sha: '9fb8b6f3dbca561c8873af7c809ace922e4dc8bca0feb1e65753ef95b3361cc8' },
-      { d: C.utf8('文件互传 邀请码 测试'), ecl: 2, ver: 3, size: 29, mask: 0,
+      { tag: 'CJK', d: C.utf8('文件互传 邀请码 测试'), ecl: 2, ver: 3, size: 29, mask: 0,
         sha: '9735f3010e4141e4aebb23327a4fb7cc6c200f82bd47201b34f8e50ef87dffbe' }
     ];
+    const bad = [];
     for (const v of V) {
       const q = QR.encodeQr(v.d, v.ecl);
-      assert(q.ver === v.ver, '版本应为 ' + v.ver + '，实际 ' + q.ver);
-      assert(q.size === v.size, '尺寸应为 ' + v.size + '，实际 ' + q.size);
-      assert(q.mask === v.mask, '掩码应为 ' + v.mask + '，实际 ' + q.mask);
       const flat = new Uint8Array(q.size * q.size);
       for (let y = 0; y < q.size; y++)
         for (let x = 0; x < q.size; x++) flat[y * q.size + x] = q.mod[y][x];
       const h = C.hex(new Uint8Array(await crypto.subtle.digest('SHA-256', flat)));
-      assert(h === v.sha, '模块指纹不符：' + h.slice(0, 16) + '…');
+      const why = [];
+      if (q.ver !== v.ver) why.push('版本 ' + q.ver + '≠' + v.ver);
+      if (q.size !== v.size) why.push('尺寸 ' + q.size + '≠' + v.size);
+      if (q.mask !== v.mask) why.push('掩码 ' + q.mask + '≠' + v.mask);
+      if (h !== v.sha) why.push('指纹 ' + h.slice(0, 12) + '≠' + v.sha.slice(0, 12));
+      if (why.length) bad.push('[' + v.tag + '] ' + why.join('，'));
     }
+    /* 三组一次report完，别第一组就 throw——否则每轮只能看到一个线索 */
+    assert(!bad.length, bad.join('  ｜  '));
     return '3 组全中（版本 1 / 17 / 3）';
   });
 
