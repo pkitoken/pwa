@@ -121,7 +121,29 @@ async function api(cfg, path, opts) {
 
 export async function probe(cfg) {
   const r = await api(cfg, '');
-  return { private: r.private, push: !!(r.permissions && r.permissions.push), branch: r.default_branch };
+  return {
+    private: r.private,
+    push: !!(r.permissions && r.permissions.push),
+    branch: r.default_branch,
+    /* size 是 GitHub 自己报的仓库占用（KB），**含 git 历史**——删过的密文
+       也还算在里面。正因如此它才是判断「该压平历史了」的那个数。 */
+    sizeKb: r.size || 0,
+    pushedAt: r.pushed_at || null
+  };
+}
+
+/* 列一个目录。用来数 blobs/ 里到底有多少文件、有没有没人引用的孤儿。
+   一次调用就够，不用逐层遍历。 */
+export async function list(cfg, path, ref) {
+  const url = '/contents/' + path.split('/').map(encodeURIComponent).join('/') +
+              '?ref=' + encodeURIComponent(ref || cfg.branch);
+  try {
+    const r = await api(cfg, url);
+    return Array.isArray(r) ? r : [];
+  } catch (e) {
+    if (e.status === 404) return [];
+    throw e;
+  }
 }
 
 /* Contents API 加 raw 媒体类型，最大能直接取回 100 MB，不必先查 blob sha。 */
