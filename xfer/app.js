@@ -317,6 +317,48 @@ function personByKid(kid) {
   return st.roster ? st.roster.people.find((p) => p.kid === kid) : null;
 }
 
+/* ---------------------------------------------------------- 令牌轮换 */
+
+/* 管理员换了 PAT，就把新令牌用每个人的公钥各封装一份，写成 token.json。
+   各设备刷新时自己取回来换掉，不用你挨个通知——和股票那套 inbox-token.json
+   同一个路子。
+
+   两条必须守住的规矩：
+   1. 这份东西**必须由管理员签名**，且签名公钥要等于应用里钉死的 ADMIN_PUB。
+      否则任何拿着当前令牌的人都能发一份「新令牌」，把所有人骗到他自己的仓库去。
+   2. 换发要有重叠期：**先发布新令牌，等大家取到了，再去 GitHub 吊销旧的**。
+      顺序反了，所有人都连不上，也就取不到新的了。 */
+async function pickupToken() {
+  if (!ADMIN_PUB) return;                     /* 没钉公钥就不敢自动换 */
+  let t = null;
+  try { t = await S.readJson(st.cfg, 'token.json'); } catch (e) { return; }
+  if (!t || !t.ts || !t.blob) return;
+
+  const seen = (await S.kvGet('tokenTs')) || 0;
+  if (t.ts <= seen) return;                   /* 处理过了 */
+
+  const entry = { id: t.id, epk: t.epk, recips: t.recips || [] };
+  if (!entry.recips.some((r) => r.kid === st.id.kid)) {
+    /* 这次轮换没带上我——多半是被移出圈子了。记下时间戳，别每次都重试。 */
+    await S.kvSet('tokenTs', t.ts);
+    return;
+  }
+  try {
+    const r = await C.open(entry, C.unb64(t.blob), st.keys.dhPriv, st.id.kid);
+    if (!r.trusted || r.meta.from.sig !== ADMIN_PUB) {
+      toast('有人发了一份假的令牌更新，已忽略', 5000);
+      return;
+    }
+    const tok = C.fromUtf8(r.data).trim();
+    if (tok && tok !== st.cfg.token) {
+      st.cfg.token = tok;
+      await S.kvSet('repo', st.cfg);
+      toast('访问令牌已自动更新');
+    }
+    await S.kvSet('tokenTs', t.ts);
+  } catch (e) { /* 解不开就算了，下次再说 */ }
+}
+
 /* ------------------------------------------------------------- 收件流程 */
 
 async function refreshInbox() {
@@ -327,6 +369,7 @@ async function refreshInbox() {
     /* 每次刷新都顺手拉一次花名册——管理员改了分组，这边才跟得上；否则本机
        缓存的那份能用一辈子。拉不到就继续用旧的，不影响收文件。 */
     try { await loadRoster(true); renderRecips(); } catch (e) { /* 收件不强依赖花名册 */ }
+    await pickupToken();
     const idx = await S.readJson(st.cfg, 'index.json') || { v: 1, entries: [] };
     st.index = idx;
     await purgeIfNeeded(idx);

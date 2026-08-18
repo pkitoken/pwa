@@ -174,6 +174,35 @@ async function person(name) {
     return '签名把收件人列表也锁住了';
   });
 
+  await t('轮换令牌：只有管理员签的那份才算数', async () => {
+    const adminKp = await C.genSig();
+    const adminPub = await C.exportPub(adminKp.publicKey);
+    const bob = await person('bob2');
+    const tok = 'github_pat_' + new Array(83).join('y');
+
+    const sealed = await C.seal(C.utf8(tok), { name: 'token', type: 'text/plain', ts: Date.now() },
+      [{ kid: bob.kid, dh: bob.dh }],
+      { uid: 'admin', name: '管理员', sigPriv: adminKp.privateKey, sigPub: adminPub });
+
+    const entry = { id: sealed.id, epk: sealed.epk, recips: sealed.recips };
+    const r = await C.open(entry, sealed.blob, bob.dhPriv, bob.kid);
+    assert(r.trusted === true, '管理员签的却验不过');
+    assert(r.meta.from.sig === adminPub, '签名公钥对不上');
+    assert(C.fromUtf8(r.data) === tok, '令牌没还原');
+
+    /* 冒充：别人拿着当前令牌也能写仓库，但签名公钥不等于 ADMIN_PUB，应用必须拒收 */
+    const evilKp = await C.genSig();
+    const evil = await C.seal(C.utf8('github_pat_攻击者的令牌'),
+      { name: 'token', type: 'text/plain', ts: Date.now() },
+      [{ kid: bob.kid, dh: bob.dh }],
+      { uid: 'admin', name: '管理员', sigPriv: evilKp.privateKey, sigPub: await C.exportPub(evilKp.publicKey) });
+    const r2 = await C.open({ id: evil.id, epk: evil.epk, recips: evil.recips },
+      evil.blob, bob.dhPriv, bob.kid);
+    assert(r2.trusted === true, '这份自身签名是自洽的');
+    assert(r2.meta.from.sig !== adminPub, '冒充者的公钥不该等于管理员的');
+    return '真的收、假的拒';
+  });
+
   await t('花名册签名与篡改检测', async () => {
     const kp = await C.genSig();
     const pub = await C.exportPub(kp.publicKey);
