@@ -333,13 +333,24 @@ export function encodeQr(bytes, ecl) {
   return { size, ver, mask: bestMask, mod: best };
 }
 
-/* 画成 SVG：矢量，放大缩小和打印都不糊，也不用 canvas。
-   quiet 是四周的空白边，标准要求至少 4 个模块，少了扫不出来。 */
+/* 画成 SVG。
+
+   尺寸必须自己定死，不能交给 CSS 拉成 100% 宽：在桌面浏览器上那会变成
+   三四十厘米一张，手机凑近了拍反而框不全静默区，解码器根本锁不上。
+   这里按「整数像素每模块」算出一个固定尺寸，目标 ~380px（约 10 cm），
+   手机在 20–30 cm 处一扫就中。
+
+   quiet 是四周空白边，标准要求至少 4 个模块，少了扫不出来。 */
 export function qrSvg(bytes, opts) {
   const o = opts || {};
   const q = o.quiet === undefined ? 4 : o.quiet;
   const { size, mod, ver } = encodeQr(bytes, o.ecl);
   const dim = size + q * 2;
+
+  /* 每个模块占整数个像素，边界才不会被重采样成宽窄不一的条 */
+  const target = o.px || 380;
+  const scale = Math.max(2, Math.min(16, Math.round(target / dim)));
+  const px = dim * scale;
 
   let d = '';
   for (let y = 0; y < size; y++)
@@ -347,9 +358,10 @@ export function qrSvg(bytes, opts) {
       if (mod[y][x]) d += 'M' + (x + q) + ' ' + (y + q) + 'h1v1h-1z';
 
   return {
-    ver, size,
+    ver, size, px, scale,
     svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + dim + ' ' + dim + '" ' +
-         'shape-rendering="crispEdges" width="100%" role="img" aria-label="邀请二维码">' +
+         'width="' + px + '" height="' + px + '" shape-rendering="crispEdges" ' +
+         'role="img" aria-label="二维码">' +
          '<rect width="' + dim + '" height="' + dim + '" fill="#fff"/>' +
          '<path d="' + d + '" fill="#000"/></svg>'
   };

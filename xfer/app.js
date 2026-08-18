@@ -231,7 +231,8 @@ async function showPairSheet() {
     const p = await makePairCode();
     $('pairTtl').textContent = PAIR_TTL_MIN + ' 分钟';
     $('pairQr').innerHTML = p.qr.svg +
-      '<div class="qrmeta">版本 ' + p.qr.ver + ' · ' + p.qr.size + '×' + p.qr.size + ' 模块</div>';
+      '<div class="qrmeta">版本 ' + p.qr.ver + ' · ' + p.qr.size + '×' + p.qr.size + ' 模块 · ' +
+      p.qr.px + 'px · 离屏幕 20–30 厘米扫</div>';
     $('pairText').value = p.text;
     $('pair').hidden = false;
   } catch (e) {

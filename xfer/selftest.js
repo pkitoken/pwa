@@ -274,14 +274,24 @@ async function person(name) {
     assert(q.svg.indexOf('<svg') === 0, '不是 SVG');
     assert(q.svg.indexOf('viewBox="0 0 93 93"') > 0, '静默区不对（应为 85+4+4=93）');
     assert(q.svg.length > 1000, 'SVG 内容太短，八成没画出来');
-    return '版本 ' + q.ver + '，' + q.svg.length + ' 字节 SVG';
+    /* 尺寸必须是模块数的整数倍，且落在能扫的范围里——否则会像 1.0 那样
+       被 CSS 拉成三四十厘米，手机反而扫不动 */
+    assert(q.px === 93 * q.scale, '像素尺寸不是模块的整数倍');
+    assert(q.scale >= 3, '每模块只有 ' + q.scale + 'px，屏幕上太细了');
+    assert(q.px >= 240 && q.px <= 560, '整体 ' + q.px + 'px，不在好扫的范围');
+    assert(q.svg.indexOf('width="' + q.px + '"') > 0, 'SVG 没写死宽度');
+    return '版本 ' + q.ver + '，' + q.px + 'px（每模块 ' + q.scale + 'px）';
   });
 
   /* 最后放一张真码出来，让人拿相机扫一下——这是唯一能验证「真解码器读得懂」
      的办法，逐模块比对只能证明和参考实现一致。 */
   const probe = 'TXF2-selftest-' + new Date().toISOString().slice(0, 10);
   document.getElementById('scanExpect').textContent = probe;
-  document.getElementById('scanQr').innerHTML = QR.qrSvg(C.utf8(probe), { ecl: 1 }).svg;
+  const sq = QR.qrSvg(C.utf8(probe), { ecl: 1 });
+  document.getElementById('scanQr').innerHTML = sq.svg;
+  document.getElementById('scanMeta').textContent =
+    '版本 ' + sq.ver + ' · ' + sq.size + '×' + sq.size + ' 模块 · ' + sq.px + 'px（每模块 ' +
+    sq.scale + 'px）· 手机离屏幕 20–30 厘米，整张连白边一起框进去';
 
   const s = document.getElementById('sum');
   s.textContent = pass + ' 通过 / ' + fail + ' 失败';

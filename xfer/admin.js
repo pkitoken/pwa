@@ -242,7 +242,7 @@ function showInvite(p) {
 
   $('invWho').textContent = p.name + ' 的邀请码';
   $('invMeta').textContent = bytes.length + ' 字节 · 二维码版本 ' + q.ver + '（' + q.size + '×' + q.size +
-    ' 模块）· ' + fmtTime(exp * 1000) + ' 过期 · 只能领一次';
+    ' 模块，' + q.px + 'px）· 离屏幕 20–30 厘米扫 · ' + fmtTime(exp * 1000) + ' 过期 · 只能领一次';
   $('invQr').innerHTML = q.svg;
   $('invText').value = I.inviteToText(bytes);
   $('invText').dataset.uid = p.uid;
