@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>文件互传 · 管理</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0f1115">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="top">
+  <h1>管理台</h1>
+  <div class="who">发钥匙 · 编组 · 签花名册</div>
+</header>
+
+<main id="app">
+
+  <p class="hint">这一页只有你用。它本身不含任何秘密——没有管理员私钥就签不出花名册，
+    所以放在公开的 Pages 上也无所谓。<b>私钥存在这台设备的浏览器里</b>，换机器要先导出备份。</p>
+
+  <h2>一、管理员签名钥匙</h2>
+  <div class="card">
+    <div class="row"><span>状态</span><b id="adState">未生成</b></div>
+    <label class="fld"><span>公钥（粘到 app.js 的 ADMIN_PUB）</span>
+      <input id="adPub" class="inp mono" readonly></label>
+    <div class="btns">
+      <button id="btnGenAdmin" class="btn">生成新的管理员钥匙</button>
+      <button id="btnExpAdmin" class="btn">导出备份</button>
+      <button id="btnImpAdmin" class="btn">导入备份</button>
+    </div>
+    <p class="hint">换了这把钥匙，所有装好的应用都会拒绝新花名册，直到你把新公钥
+      发布进 app.js 并升级版本。轻易别换。</p>
+  </div>
+
+  <h2>二、仓库（会写进每张邀请码）</h2>
+  <div class="card">
+    <label class="fld"><span>仓库</span><input id="adRepo" class="inp mono" placeholder="pkitoken/xfer-store" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <label class="fld"><span>分支</span><input id="adBranch" class="inp mono" placeholder="main" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <label class="fld"><span>共享令牌</span><input id="adToken" class="inp mono" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <div class="btns"><button id="btnSaveRepo2" class="btn">保存</button></div>
+  </div>
+
+  <h2>三、成员与分组</h2>
+  <div class="card">
+    <label class="fld"><span>姓名</span><input id="nwName" class="inp" placeholder="张三"></label>
+    <label class="fld"><span>代号（英文，唯一）</span><input id="nwUid" class="inp mono" placeholder="zhangsan" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <label class="fld"><span>所在组（逗号分隔）</span><input id="nwGroups" class="inp" placeholder="家人, 同事"></label>
+    <div class="btns"><button id="btnAdd" class="btn primary">生成钥匙并加入</button></div>
+  </div>
+  <ul id="people" class="list" style="margin-top:12px"></ul>
+  <div class="btns"><button id="btnClaims" class="btn">刷新领取状态</button></div>
+
+  <h2>四、花名册</h2>
+  <div class="card">
+    <div class="btns">
+      <button id="btnSign" class="btn">签名并预览</button>
+      <button id="btnPush" class="btn primary">直接写入仓库</button>
+      <button id="btnDownload" class="btn">下载 roster.json</button>
+      <button id="btnLoad" class="btn">从仓库拉取</button>
+    </div>
+    <p id="rosterState" class="state" hidden></p>
+    <textarea id="rosterOut" class="ta mono" rows="8" readonly placeholder="签好的 roster.json 会出现在这里"></textarea>
+  </div>
+
+  <h2>五、邀请码</h2>
+  <div class="card">
+    <p class="hint">每张码<b>只能领一次</b>：谁先导入谁把它烧掉，第二个人扫同一张会被拒。
+      码里含成员私钥和共享令牌，<b>只能走线下渠道发</b>（当面、Signal、U 盘）。
+      要注意：<b>令牌本身没法作废</b>——被偷拍了就是被偷拍了，只能去 GitHub 换一条 PAT。</p>
+    <label class="fld"><span>新发的码多久过期</span>
+      <select id="ttl" class="sel">
+        <option value="1">1 小时</option>
+        <option value="24" selected>24 小时</option>
+        <option value="168">7 天</option>
+      </select></label>
+    <div class="btns"><button id="btnWipeKeys" class="btn danger">清除本机保存的全部私钥</button></div>
+  </div>
+
+<!-- ===================================================== 某人的邀请二维码 -->
+<div id="inv" class="sheet" hidden>
+  <div class="sheetbox">
+    <h2 id="invWho">邀请码</h2>
+    <p class="hint" id="invMeta"></p>
+    <div id="invQr" class="qrbox"></div>
+    <textarea id="invText" class="ta mono" rows="4" readonly></textarea>
+    <div class="btns">
+      <button id="btnInvCopy" class="btn">复制文字</button>
+      <button id="btnInvSave" class="btn">存成文件</button>
+      <button id="btnInvClose" class="btn">关闭</button>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<div id="toast" class="toast" hidden></div>
+<script type="module" src="admin.js"></script>
+</body>
+</html>

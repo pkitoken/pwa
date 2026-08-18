@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>文件互传</title>
+<meta name="description" content="端到端加密的小圈子文件互传。">
+<meta name="theme-color" content="#0f1115">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="top">
+  <h1>文件互传</h1>
+  <div id="who" class="who">未导入身份</div>
+</header>
+
+<main id="app">
+
+  <!-- ======================================================= 收件 -->
+  <section id="tab-inbox" class="tab">
+    <div class="bar">
+      <button id="btnRefresh" class="btn">检查有没有我的文件</button>
+      <span id="inboxHint" class="hint"></span>
+    </div>
+    <ul id="inbox" class="list"></ul>
+    <p id="inboxEmpty" class="empty">还没检查过。点上面的按钮。</p>
+  </section>
+
+  <!-- ======================================================= 发送 -->
+  <section id="tab-send" class="tab" hidden>
+    <!-- 输入框放在 .pick 外面：程序化 click() 的事件会冒泡，套在里面就会
+         触发外层 handler 再 click 一次，无限循环 -->
+    <input type="file" id="file" multiple hidden>
+    <div class="pick" id="pick" role="button" tabindex="0">
+      <span id="fileLabel">点这里选择文件（可多选）</span>
+    </div>
+
+    <h2>发给谁</h2>
+    <p class="hint" id="recipHint">花名册没载入。</p>
+    <div id="recips" class="recips"></div>
+
+    <h2>保留策略</h2>
+    <select id="policy" class="sel">
+      <option value="ack" selected>所有收件人下载后删除</option>
+      <option value="1">1 天后删除</option>
+      <option value="3">3 天后删除</option>
+      <option value="7">7 天后删除</option>
+      <option value="14">14 天后删除</option>
+      <option value="30">30 天后删除</option>
+    </select>
+
+    <button id="btnSend" class="btn primary wide">加密并发送</button>
+    <p id="sendState" class="state" hidden></p>
+
+    <h2>我发出的</h2>
+    <ul id="sent" class="list"></ul>
+    <p id="sentEmpty" class="empty">还没发过文件。</p>
+  </section>
+
+  <!-- ======================================================= 设置 -->
+  <section id="tab-set" class="tab" hidden>
+
+    <h2>身份</h2>
+    <div class="card" id="idCard">
+      <div class="row"><span>姓名</span><b id="setName">—</b></div>
+      <div class="row"><span>代号</span><b id="setUid">—</b></div>
+      <div class="row"><span>钥匙指纹</span><b id="setKid" class="mono">—</b></div>
+      <div class="row"><span>所在组</span><b id="setGroups">—</b></div>
+      <div class="row"><span>本机设备</span><b id="setDev" class="mono">—</b></div>
+      <div class="btns">
+        <button id="btnPair" class="btn primary">添加我的另一台设备</button>
+        <button id="btnImport" class="btn">导入 / 更换身份</button>
+        <button id="btnWipe" class="btn danger">清空本机数据</button>
+      </div>
+      <p class="hint">已登记的设备：</p>
+      <ul id="devList" class="list"></ul>
+    </div>
+
+    <h2>仓库</h2>
+    <div class="card">
+      <label class="fld"><span>仓库</span><input id="setRepo" class="inp mono" placeholder="pkitoken/xfer-store" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+      <label class="fld"><span>分支</span><input id="setBranch" class="inp mono" placeholder="main" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+      <label class="fld"><span>访问令牌</span><input id="setToken" class="inp mono" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+      <div class="btns">
+        <button id="btnSaveRepo" class="btn">保存</button>
+        <button id="btnTest" class="btn">测试连接</button>
+      </div>
+      <p id="repoState" class="state" hidden></p>
+    </div>
+
+    <h2>花名册</h2>
+    <div class="card">
+      <p class="hint" id="rosterInfo">未载入。</p>
+      <div class="btns"><button id="btnRoster" class="btn">重新拉取花名册</button></div>
+    </div>
+
+    <h2>关于</h2>
+    <div class="card">
+      <p class="hint">
+        文件在你手机上加密后才上传，会话密钥分别用每位收件人的公钥封装。
+        仓库管理员、GitHub 都拿不到明文。索引里只有钥匙指纹，文件名和发件人
+        写在密文里面。
+      </p>
+      <div class="row"><span>版本</span><b id="ver" class="mono">—</b></div>
+      <div class="btns"><button id="btnUpdate" class="btn">检查更新</button></div>
+    </div>
+
+  </section>
+
+</main>
+
+<nav class="tabbar" aria-label="切换页面">
+  <button class="tabbtn on" data-tab="inbox">收件</button>
+  <button class="tabbtn" data-tab="send">发送</button>
+  <button class="tabbtn" data-tab="set">设置</button>
+</nav>
+
+<!-- ========================================================= 配对新设备 -->
+<div id="pair" class="sheet" hidden>
+  <div class="sheetbox">
+    <h2>添加我的另一台设备</h2>
+    <p class="hint">这张码把你的身份复制到另一台设备上，<b id="pairTtl">10 分钟</b>内有效，
+      且只能用一次。手机扫码；笔记本没摄像头就复制下面那段文字，在那边的
+      「导入 / 更换身份」里粘贴。</p>
+    <div id="pairQr" class="qrbox"></div>
+    <textarea id="pairText" class="ta mono" rows="4" readonly></textarea>
+    <div class="btns">
+      <button id="btnPairCopy" class="btn">复制文字</button>
+      <button id="btnPairClose" class="btn">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================================= 导入身份 -->
+<div id="setup" class="sheet" hidden>
+  <div class="sheetbox">
+    <h2>导入身份</h2>
+    <p class="hint">把管理员给你的那串邀请码整段粘进来。里面含你的私钥和仓库令牌，
+      只会存在这台设备上。</p>
+    <p id="iosWarn" class="state err" hidden></p>
+    <textarea id="inviteText" class="ta mono" rows="6" placeholder="TXF2.… 或整条链接" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+    <div class="btns">
+      <button id="btnInviteFile" class="btn">从文件选取</button>
+      <input type="file" id="inviteFile" accept=".txt,.json,application/json,text/plain" hidden>
+      <button id="btnInviteCopy" class="btn">复制</button>
+      <button id="btnInviteOk" class="btn primary">导入</button>
+      <button id="btnInviteCancel" class="btn">取消</button>
+    </div>
+    <p id="inviteState" class="state" hidden></p>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

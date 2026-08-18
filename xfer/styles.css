@@ -1,0 +1,245 @@
+/* 文件互传 —— 所有样式都在这里，不引外部字体、不引外部资源。 */
+
+:root {
+  --bg:     #0f1115;
+  --panel:  #171a21;
+  --panel2: #1e222b;
+  --line:   #2a2f3a;
+  --fg:     #e6e9ef;
+  --dim:    #98a0b0;
+  --faint:  #6b7386;
+  --accent: #4da3ff;
+  --good:   #46c98b;
+  --warn:   #f0b34a;
+  --bad:    #ff6b6b;
+  --pad: 14px;
+  --pad: clamp(12px, 3.6vw, 18px);
+  --han: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+         "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "Segoe UI",
+         Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+/* .sheet 用了 display:flex，否则会盖过浏览器自带的 [hidden] 规则 */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--han);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100vh;
+  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+}
+
+.mono { font-family: var(--mono); }
+
+/* ------------------------------------------------------------------ 顶栏 */
+
+.top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: calc(env(safe-area-inset-top) + 12px) var(--pad) 10px;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 5;
+}
+.top h1 { margin: 0; font-size: 1.05rem; font-weight: 600; letter-spacing: .04em; }
+.who { margin-left: auto; color: var(--dim); font-size: .82rem; }
+
+/* ------------------------------------------------------------------ 布局 */
+
+#app { padding: var(--pad); }
+.tab > h2:first-child { margin-top: 0; }
+h2 { font-size: .82rem; font-weight: 600; color: var(--faint); margin: 22px 0 8px;
+     letter-spacing: .08em; }
+
+.hint  { color: var(--dim);   font-size: .82rem; margin: 6px 0; }
+.empty { color: var(--faint); font-size: .88rem; text-align: center; padding: 28px 0; }
+.state { font-size: .82rem; margin: 8px 0 0; color: var(--dim); }
+.state.ok  { color: var(--good); }
+.state.err { color: var(--bad); }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.row { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0;
+       font-size: .9rem; }
+.row span { color: var(--dim); flex: none; }
+.row b { font-weight: 500; text-align: right; overflow-wrap: anywhere; }
+
+/* ------------------------------------------------------------------ 控件 */
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  color: var(--fg);
+  font: inherit;
+  font-size: .88rem;
+  padding: 9px 14px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.btn:active { background: var(--line); }
+.btn[disabled] { opacity: .45; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #08111c; font-weight: 600; }
+.btn.danger  { color: var(--bad); }
+.btn.wide    { display: block; width: 100%; margin-top: 14px; padding: 12px; font-size: .95rem; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+.inp, .sel, .ta {
+  appearance: none;
+  width: 100%;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--fg);
+  font: inherit;
+  font-size: .9rem;
+  padding: 9px 11px;
+}
+.sel { background-image: none; }
+.ta { resize: vertical; line-height: 1.4; font-size: .8rem; }
+.fld { display: block; margin-bottom: 10px; }
+.fld span { display: block; font-size: .78rem; color: var(--dim); margin-bottom: 4px; }
+
+.bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* -------------------------------------------------------------- 选文件区 */
+
+.pick {
+  display: block;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 22px 14px;
+  text-align: center;
+  color: var(--dim);
+  font-size: .9rem;
+  cursor: pointer;
+}
+.pick.has { border-style: solid; color: var(--fg); text-align: left; }
+
+/* -------------------------------------------------------------- 收件人 */
+
+.recips { display: flex; flex-direction: column; gap: 12px; }
+.group {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.gname { font-size: .78rem; color: var(--faint); letter-spacing: .06em; margin-bottom: 6px; }
+.person { display: flex; align-items: center; gap: 10px; padding: 7px 0; cursor: pointer; }
+.person input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
+.person .pn { font-size: .95rem; }
+.person .pk { margin-left: auto; font-size: .7rem; color: var(--faint); font-family: var(--mono); }
+
+/* ------------------------------------------------------------------ 列表 */
+
+.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.item {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 11px 12px;
+}
+.item .n { font-size: .95rem; overflow-wrap: anywhere; }
+.item .m { font-size: .76rem; color: var(--dim); margin-top: 3px; }
+.item .m .sep { color: var(--faint); margin: 0 6px; }
+.item .acts { display: flex; gap: 8px; margin-top: 9px; flex-wrap: wrap; align-items: center; }
+.tag { font-size: .7rem; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); }
+.tag.ok   { color: var(--good); border-color: rgba(70,201,139,.4); }
+.tag.warn { color: var(--warn); border-color: rgba(240,179,74,.4); }
+.tag.bad  { color: var(--bad);  border-color: rgba(255,107,107,.4); }
+
+/* ------------------------------------------------------------------ 底栏 */
+
+.tabbar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 5;
+}
+.tabbtn {
+  flex: 1;
+  appearance: none;
+  background: none;
+  border: 0;
+  color: var(--faint);
+  font: inherit;
+  font-size: .85rem;
+  padding: 15px 0;
+  cursor: pointer;
+}
+.tabbtn.on { color: var(--accent); }
+
+/* ------------------------------------------------------------------ 弹层 */
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--pad);
+  z-index: 20;
+}
+.sheetbox {
+  width: 100%;
+  max-width: 520px;
+  max-height: 88vh;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+}
+.sheetbox h2 { margin-top: 0; color: var(--fg); font-size: 1rem; letter-spacing: 0; }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  font-size: .85rem;
+  padding: 10px 16px;
+  border-radius: 999px;
+  max-width: 86vw;
+  text-align: center;
+  z-index: 30;
+}
+
+/* -------------------------------------------------------------- 二维码 */
+
+.qrbox {
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px;
+  margin: 12px 0;
+}
+.qrbox svg { display: block; width: 100%; height: auto; }
+.qrmeta { font-size: .72rem; color: var(--faint); text-align: center; margin-top: 6px; }

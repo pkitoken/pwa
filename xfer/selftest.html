@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文件互传 · 自检</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top"><h1>自检</h1><div class="who" id="sum">运行中…</div></header>
+<main id="app">
+  <p class="hint">这一页不碰网络、不碰仓库，只在本机跑一遍加解密的全流程。
+    改过 crypto.js 之后先来这里看一眼全绿再发布。</p>
+  <ul id="out" class="list"></ul>
+
+  <h2>用真手机验一次</h2>
+  <p class="hint">上面的对比只能证明「和参考实现算出来一样」。要证明<b>扫得出来</b>，
+    还得用真解码器试一次：拿手机相机扫下面这张码，看弹出来的文字是不是和它下面那行一模一样。</p>
+  <div id="scanQr" class="qrbox"></div>
+  <p class="hint">应当扫出：<b id="scanExpect" class="mono"></b></p>
+</main>
+<script type="module" src="selftest.js"></script>
+</body>
+</html>
