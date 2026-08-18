@@ -414,8 +414,14 @@ function renderInbox() {
   const ul = $('inbox');
   ul.textContent = '';
   const kid = st.id ? st.id.kid : '';
+  /* 发给自己的文件，发件的那台设备要藏起来——否则它自己就把自己发的
+     收了，另一台还没来得及取，文件已经按「下载后删除」清掉了。
+     st.sent 是本机发件记录，另一台设备没有，所以那边照常显示。 */
+  const sentHere = {};
+  for (const r of st.sent) sentHere[r.id] = true;
+
   const mine = (st.index ? st.index.entries : [])
-    .filter((e) => e.recips.some((r) => r.kid === kid))
+    .filter((e) => e.recips.some((r) => r.kid === kid) && !sentHere[e.id])
     .sort((a, b) => b.ts - a.ts);
 
   $('inboxEmpty').hidden = mine.length > 0;
@@ -587,8 +593,49 @@ function renderRecips() {
   if (!self) { hint.textContent = '花名册里没有你这把钥匙，找管理员把你加进去。'; return; }
 
   const groups = self.groups || [];
-  if (!groups.length) { hint.textContent = '你还没被分到任何组。'; return; }
-  hint.textContent = '只列出和你同组的人。你在：' + groups.join('、');
+  hint.textContent = groups.length
+    ? '只列出和你同组的人。你在：' + groups.join('、')
+    : '你还没被分到任何组——只能发给自己的其它设备。';
+
+  /* 传给自己：手机 ↔ 电脑。两台设备用的是同一个身份、同一个 kid，所以
+     收件人写的还是自己那把公钥，发件的这台会把这条从自己的收件箱里藏起来
+     （见 renderInbox），免得自己把自己发的文件又「收」一遍。 */
+  {
+    const div = document.createElement('div');
+    div.className = 'group';
+    const h = document.createElement('div');
+    h.className = 'gname';
+    h.textContent = '我自己';
+    div.appendChild(h);
+
+    const lab = document.createElement('label');
+    lab.className = 'person';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.dataset.kid = self.kid;
+    cb.checked = sel.has(self.kid);
+    cb.onchange = () => {
+      if (cb.checked) sel.add(self.kid); else sel.delete(self.kid);
+    };
+    const nm = document.createElement('span');
+    nm.className = 'pn';
+    nm.textContent = '我的其它设备';
+    const kk = document.createElement('span');
+    kk.className = 'pk';
+    kk.textContent = '手机 ↔ 电脑';
+    lab.appendChild(cb);
+    lab.appendChild(nm);
+    lab.appendChild(kk);
+    div.appendChild(lab);
+
+    const note = document.createElement('div');
+    note.className = 'gname';
+    note.style.marginTop = '4px';
+    note.textContent = '有三台以上设备时：选「下载后删除」是谁先取谁拿到，' +
+                       '想每台都拿一份就挑按天保留的。';
+    div.appendChild(note);
+    box.appendChild(div);
+  }
 
   for (const g of groups) {
     const mates = st.roster.people.filter((p) => p.kid !== self.kid && (p.groups || []).indexOf(g) >= 0);
@@ -642,7 +689,7 @@ async function send() {
   const recips = [];
   for (const kid of sel) {
     const p = personByKid(kid);
-    if (p) recips.push({ kid: p.kid, dh: p.dh, name: p.name });
+    if (p) recips.push({ kid: p.kid, dh: p.dh, name: p.kid === st.id.kid ? '我的其它设备' : p.name });
   }
   if (!recips.length) { say(state, '收件人在花名册里找不到，先刷新花名册。', 'err'); return; }
 

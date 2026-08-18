@@ -8,7 +8,7 @@
 
 /* 版本号两位，次版本到 9 就进位：1.8 → 1.9 → 2.0 → 2.1。不要出现 1.10。
    （这里的字符串只用来给缓存命名，不做大小比较，所以改成什么都安全。） */
-const VERSION = '2.2';
+const VERSION = '2.3';
 const CACHE = `xfer-${VERSION}`;
 
 const SHELL = [

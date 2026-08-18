@@ -174,6 +174,24 @@ async function person(name) {
     return '签名把收件人列表也锁住了';
   });
 
+  await t('传给自己：同一把钥匙自封自解', async () => {
+    /* 手机发、电脑收，两台设备是同一个身份、同一个 kid，所以就是自己封给自己 */
+    const me2 = await person('自己');
+    const data = crypto.getRandomValues(new Uint8Array(4096));
+    const sealed = await C.seal(data, { name: '报表.xlsx', type: '', ts: Date.now() },
+      [{ kid: me2.kid, dh: me2.dh }],
+      { uid: me2.uid, name: me2.name, sigPriv: me2.sigPriv, sigPub: me2.sig });
+    const entry = { id: sealed.id, epk: sealed.epk, recips: sealed.recips };
+
+    const pv = await C.peek(entry, me2.dhPriv, me2.kid);
+    assert(pv && pv.n === '报表.xlsx', '摘要解不出来');
+    const r = await C.open(entry, sealed.blob, me2.dhPriv, me2.kid);
+    assert(same(r.data, data), '内容对不上');
+    assert(r.trusted === true, '自己签的却验不过');
+    assert(r.meta.from.sig === me2.sig, '发件人公钥不对');
+    return '4 KB 自传自收一致';
+  });
+
   await t('轮换令牌：只有管理员签的那份才算数', async () => {
     const adminKp = await C.genSig();
     const adminPub = await C.exportPub(adminKp.publicKey);
