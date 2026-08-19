@@ -17,7 +17,10 @@ const ADMIN_PUB = 'BI4IlzF4W6nOF6Ew9yu541CIAJg5lwKsVldXVLihsQHG7_tkAb9RpW2ULGcHD
 
 const MAX_FILE = 20 * 1024 * 1024;   /* 单个文件上限；base64 后约 27 MB，
                                         再大手机内存和 API 都不舒服 */
-const ACK_BACKSTOP_DAYS = 30;        /* 「下载后删除」的兜底期限 */
+/* 「下载后删除」的兜底期限。改这个数字必须同时改 xfer-private/tools/cleanup.mjs
+   里的同名常量——两边用的是同一套过期判断，对不上会出现「夜里的清理任务觉得
+   还活着、应用觉得该删了」，同一份文件被反复删掉又留下。 */
+const ACK_BACKSTOP_DAYS = 3;
 const DEFAULT_MAX_DEVICES = 4;       /* 一个身份默认最多几台设备 */
 const PAIR_TTL_MIN = 10;             /* 设备配对码的有效期（分钟） */
 
@@ -86,7 +89,7 @@ function fmtTime(ms) {
 }
 
 function policyText(p) {
-  return p === 'ack' ? '下载后删除' : p + ' 天后删除';
+  return p === 'ack' ? '下载后删除，最多 ' + ACK_BACKSTOP_DAYS + ' 天' : p + ' 天后删除';
 }
 
 /* 一条索引条目是否该被清掉。发件端、收件端、定时任务用的是同一套判断，
@@ -969,6 +972,10 @@ function wire() {
       if (tabs[i].dataset.tab === 'set') renderSettings();
     };
   }
+
+  /* 下拉框那一行也从常量生成，省得哪天改了数字忘了改文字 */
+  const ackOpt = $('policy').querySelector('option[value="ack"]');
+  if (ackOpt) ackOpt.textContent = '所有人下载后删除，最多留 ' + ACK_BACKSTOP_DAYS + ' 天';
 
   $('btnRefresh').onclick = refreshInbox;
 
